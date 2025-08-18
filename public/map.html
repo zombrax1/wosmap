@@ -24,16 +24,17 @@
           <span class="text-xl font-bold tracking-tight">ZOM WOS Spot Organizer</span>
           <span class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-indigo-600/30 text-indigo-200 border border-indigo-400/30">Beta</span>
         </div>
-                 <div class="ml-auto flex items-center gap-3">
-           <label class="text-xs text-slate-300">Zoom</label>
-           <input id="zoom" type="range" min="55" max="200" value="100" class="w-28 accent-indigo-400" />
-           <!-- Hamburger Menu -->
-           <button id="menuBtn" class="p-2 rounded-lg hover:bg-slate-800">
-             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-             </svg>
-           </button>
-         </div>
+        <div class="ml-auto flex items-center gap-3">
+          <label class="text-xs text-slate-300">Zoom</label>
+          <input id="zoom" type="range" min="55" max="200" value="100" class="w-28 accent-indigo-400" />
+          <button id="themeToggle" class="p-2 rounded-lg hover:bg-slate-800" title="Toggle theme">🌗</button>
+          <!-- Hamburger Menu -->
+          <button id="menuBtn" class="p-2 rounded-lg hover:bg-slate-800">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="px-3 sm:px-4 pb-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
         <div class="col-span-2 flex items-center gap-2">
@@ -169,6 +170,7 @@
      </form>
    </dialog>
 
+   <script src="js/theme.js"></script>
    <script src="js/map.js"></script>
  </body>
- </html>
+</html>
