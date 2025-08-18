@@ -15,6 +15,8 @@ A multi-page web application for organizing spots on a grid map, built with Node
 - **Search & Filter**: Search by name, filter by status and level
 - **Mobile-Friendly**: Responsive design for mobile devices
 - **Persistent Storage**: SQLite database for data persistence
+- **User Management**: Create, update, delete panel users
+- **Audit Logging**: Track changes to cities and users
 
 ### City Properties
 - **ID**: Unique identifier (auto-generated)
@@ -77,12 +79,19 @@ npm run dev
 npm test
 ```
 
+### Resetting the database
+Set the `RESET_DB` environment variable to clear existing data when the server
+starts:
+
+```bash
+RESET_DB=true npm start
+```
+
 ### Project Structure
 ```
 whiteout-spot-organizer/
 ├── server.js              # Express server with API routes
 ├── package.json           # Dependencies and scripts
-├── wos.db                 # SQLite database (created automatically)
 ├── public/                # Static files
 │   ├── map.html          # Map view page
 │   ├── list.html         # List view page
@@ -106,6 +115,15 @@ whiteout-spot-organizer/
 ### Import/Export
 - `GET /api/export` - Export all cities as JSON
 - `POST /api/import` - Import cities from JSON (replaces all data)
+
+### Users CRUD
+- `GET /api/users` - List users
+- `POST /api/users` - Create or replace user
+- `PUT /api/users/:id` - Update user
+- `DELETE /api/users/:id` - Remove user
+
+### Audit Logs
+- `GET /api/audit` - List audit log entries
 
 ## Usage
 
