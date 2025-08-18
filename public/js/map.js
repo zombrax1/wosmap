@@ -37,7 +37,6 @@ function updateUIForUser() {
     autoInsertBtn.style.display = 'block';
     clearAllBtn.style.display = 'block';
     bearTrapSelect.disabled = false;
-    clearTrapBtn.disabled = selectedBearTrap === null || !bearTraps[selectedBearTrap];
   } else {
     userModeEl.textContent = 'View Only';
     userModeEl.className = 'text-xs px-2 py-1 rounded bg-slate-700 text-slate-200';
@@ -45,7 +44,6 @@ function updateUIForUser() {
     autoInsertBtn.style.display = 'none';
     clearAllBtn.style.display = 'none';
     bearTrapSelect.disabled = true;
-    clearTrapBtn.disabled = true;
   }
 }
 
@@ -95,7 +93,11 @@ document.getElementById('clearSearch').addEventListener('click', ()=>{ searchInp
 
 const zoom = document.getElementById('zoom');
 const bearTrapSelect = document.getElementById('bearTrapSelect');
-const clearTrapBtn = document.getElementById('clearTrapBtn');
+const trapModal = document.getElementById('trapModal');
+const closeTrapModal = document.getElementById('closeTrapModal');
+const selectTrapBtn = document.getElementById('selectTrapBtn');
+const deleteTrapBtn = document.getElementById('deleteTrapBtn');
+let pendingTrap = null;
 
 // Form fields
 const idEl = document.getElementById('cityId');
@@ -196,7 +198,6 @@ function clearSelectedTrap() {
   bearTraps[selectedBearTrap] = null;
   localStorage.setItem('bearTraps', JSON.stringify(bearTraps));
   highlightBearTraps();
-  clearTrapBtn.disabled = true;
 }
 
 function buildGrid() {
@@ -222,10 +223,8 @@ function buildGrid() {
       // Click to place/remove bear traps or manage cities
       cell.addEventListener('click', (e) => {
         if (isAdmin && selectedBearTrap !== null) {
-          bearTraps[selectedBearTrap] = { x, y };
-          localStorage.setItem('bearTraps', JSON.stringify(bearTraps));
-          highlightBearTraps();
-          clearTrapBtn.disabled = false;
+          pendingTrap = { x, y };
+          trapModal.showModal();
           return;
         }
 
@@ -462,12 +461,27 @@ zoom.addEventListener('input', () => {
 bearTrapSelect.addEventListener('change', (e) => {
   const value = e.target.value;
   selectedBearTrap = value === '' ? null : Number(value);
-  clearTrapBtn.disabled = selectedBearTrap === null || !bearTraps[selectedBearTrap];
 });
 
-clearTrapBtn.addEventListener('click', () => {
-  if (!isAdmin) return;
+closeTrapModal.addEventListener('click', () => {
+  pendingTrap = null;
+  trapModal.close();
+});
+
+selectTrapBtn.addEventListener('click', () => {
+  if (!isAdmin || selectedBearTrap === null || !pendingTrap) return;
+  bearTraps[selectedBearTrap] = pendingTrap;
+  localStorage.setItem('bearTraps', JSON.stringify(bearTraps));
+  highlightBearTraps();
+  pendingTrap = null;
+  trapModal.close();
+});
+
+deleteTrapBtn.addEventListener('click', () => {
+  if (!isAdmin || selectedBearTrap === null) return;
   clearSelectedTrap();
+  pendingTrap = null;
+  trapModal.close();
 });
 
 // Center view on the grid at start

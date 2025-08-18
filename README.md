@@ -31,7 +31,7 @@ A multi-page web application for organizing spots on a grid map, built with Node
 - **Responsive Design**: Mobile-first approach with TailwindCSS
 - **Mobile Optimization**: Smaller grid and touch-friendly interface on mobile
 - **Zoom Control**: Adjustable zoom level (55% - 200%)
-- **Bear Trap Highlight**: place up to two 2×2 zones and delete them with a button
+- **Bear Trap Highlight**: manage up to two 2×2 zones via a popup after clicking the map
 - **Hover Effects**: Interactive highlighting and tooltips
 - **Modal Dialogs**: Clean add/edit interface
 - **Real-time Updates**: Instant reflection of changes
@@ -167,8 +167,8 @@ whiteout-spot-organizer/
 
 ### Bear Traps (Admin Only)
 1. Select a trap slot from the Bear Trap dropdown on the map.
-2. Click the map to place the 2×2 trap area.
-3. Use the Delete button next to the dropdown to clear the selected trap.
+2. Click the map to open a popup for the 2×2 trap area.
+3. Choose **Select** to place the trap or **Delete** to clear it.
 
 ### Searching and Filtering
 - Use the search box to find cities by name
