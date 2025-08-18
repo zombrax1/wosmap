@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Whiteout Spot Organizer - List</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/tailwind.css">
+  <style>
+    html, body { height: 100%; overscroll-behavior: none; }
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+  </style>
+</head>
+<body class="h-full bg-slate-900 text-slate-100">
+  <div class="h-full flex flex-col">
+    <!-- Top Bar -->
+    <header class="sticky top-0 z-50 backdrop-blur bg-slate-900/70 border-b border-slate-800">
+      <div class="px-3 sm:px-4 py-3 flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl font-bold tracking-tight">ZOM WOS Spot Organizer</span>
+          <span class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-indigo-600/30 text-indigo-200 border border-indigo-400/30">Beta</span>
+        </div>
+                 <div class="ml-auto flex items-center gap-3">
+           <a href="/map" class="text-indigo-300 hover:text-indigo-200 underline underline-offset-4">Map View</a>
+           <!-- Hamburger Menu -->
+           <button id="menuBtn" class="p-2 rounded-lg hover:bg-slate-800">
+             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+             </svg>
+           </button>
+         </div>
+      </div>
+    </header>
+
+         <!-- Main Content -->
+     <main class="flex-1 min-h-0 flex flex-col lg:flex-row">
+      <!-- Map Section -->
+      <div class="flex-1 min-h-0 px-2 sm:px-4 pb-4">
+        <div id="mapScroller" class="relative h-full w-full overflow-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-inner">
+          <div id="gridWrapper" class="origin-top-left will-change-transform" style="transform: scale(1)">
+            <div id="grid" class="relative grid" style="--cells: 41; grid-template-columns: repeat(var(--cells), 42px); grid-auto-rows: 42px;"></div>
+          </div>
+        </div>
+      </div>
+
+             <!-- Sidebar -->
+       <div class="w-full lg:w-80 md:w-72 sm:w-64 lg:border-l border-slate-800 bg-slate-900 flex flex-col">
+        <!-- Search and Filters -->
+        <div class="p-4 border-b border-slate-800">
+          <div class="space-y-3">
+            <input id="search" placeholder="Search cities…" class="w-full text-sm px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            
+            <div class="grid grid-cols-2 gap-2">
+              <select id="statusFilter" class="text-sm px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+                <option value="">All Status</option>
+                <option value="occupied">Occupied</option>
+                <option value="reserved">Reserved</option>
+              </select>
+              
+              <select id="levelFilter" class="text-sm px-3 py-2 rounded-xl bg-slate-800 border border-slate-700">
+                <option value="">All Levels</option>
+                <option value="1-10">Level 1-10</option>
+                <option value="11-20">Level 11-20</option>
+                <option value="21-30">Level 21-30</option>
+                <option value="31-40">Level 31-40</option>
+                <option value="41-50">Level 41-50</option>
+                <option value="51+">Level 51+</option>
+              </select>
+            </div>
+
+            <div class="flex gap-2">
+              <button id="addCityBtn" class="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-3 py-2 text-sm font-medium">Add City</button>
+              <button id="autoInsertBtn" class="rounded-xl bg-green-600 hover:bg-green-500 px-3 py-2 text-sm font-medium">Auto Insert</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cities List -->
+        <div class="flex-1 overflow-auto">
+          <div id="citiesList" class="p-2 space-y-1">
+            <!-- Cities will be populated here -->
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="p-4 border-t border-slate-800 text-xs text-slate-400">
+          <div class="flex justify-between">
+            <span>Total Cities:</span>
+            <span id="totalCount">0</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Occupied:</span>
+            <span id="occupiedCount">0</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Reserved:</span>
+            <span id="reservedCount">0</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <dialog id="cityModal" class="rounded-2xl bg-slate-900/95 border border-slate-700 p-0 text-slate-100 w-[96%] sm:w-[420px]">
+    <form id="cityForm" method="dialog">
+      <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+        <h3 id="modalTitle" class="text-lg font-semibold">Add City</h3>
+        <button type="button" id="closeModal" class="p-2 rounded-lg hover:bg-slate-800">✕</button>
+      </div>
+      <div class="p-4 grid grid-cols-2 gap-3">
+        <input type="hidden" id="cityId" />
+        <div class="col-span-2">
+          <label class="text-xs text-slate-300">Member name</label>
+          <input id="name" required class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="e.g. HadesPrime13" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-300">Level</label>
+          <input id="level" type="number" min="1" max="100" class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-300">Status</label>
+          <select id="status" class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2">
+            <option value="occupied">Occupied</option>
+            <option value="reserved">Reserved</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-300">X</label>
+          <input id="x" type="number" class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-300">Y</label>
+          <input id="y" type="number" class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" />
+        </div>
+        <div class="col-span-2">
+          <label class="text-xs text-slate-300">Color</label>
+          <input id="color" type="color" value="#ec4899" class="mt-1 w-full h-10 rounded-xl bg-slate-800 border border-slate-700" />
+        </div>
+        <div class="col-span-2">
+          <label class="text-xs text-slate-300">Notes</label>
+          <textarea id="notes" rows="2" class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="Optional"></textarea>
+        </div>
+      </div>
+      <div class="p-4 border-t border-slate-700 flex justify-between items-center">
+        <div class="flex gap-2">
+          <button value="cancel" type="button" id="deleteBtn" class="hidden px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-sm">Delete</button>
+        </div>
+        <div class="ml-auto flex gap-2">
+          <button value="cancel" type="button" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm">Cancel</button>
+          <button id="saveBtn" value="default" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm">Save</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+     <!-- Hamburger Menu Dropdown -->
+   <div id="menuDropdown" class="hidden absolute top-16 right-4 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-48">
+     <div class="p-2">
+       <a href="/map" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">🗺️ Map View</a>
+       <a href="/list" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded bg-slate-700">📋 List View</a>
+       <a href="/history" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">📜 Edit History</a>
+       <a href="/users" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">👥 Users & Audit</a>
+       <hr class="border-slate-600 my-1">
+       <button id="adminLoginBtn" class="block w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">🔐 Admin Login</button>
+       <button id="logoutBtn" class="hidden block w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-slate-700 rounded">🚪 Logout</button>
+     </div>
+   </div>
+
+   <!-- Admin Login Modal -->
+   <dialog id="adminLoginModal" class="rounded-2xl bg-slate-900/95 border border-slate-700 p-0 text-slate-100 w-[96%] sm:w-[420px]">
+     <form id="adminLoginForm" method="dialog">
+       <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+         <h3 class="text-lg font-semibold">Admin Login</h3>
+         <button type="button" id="closeAdminLogin" class="p-2 rounded-lg hover:bg-slate-800">✕</button>
+       </div>
+       <div class="p-4 space-y-4">
+         <div>
+           <label class="text-xs text-slate-300">Username</label>
+           <input id="adminUsername" type="text" required class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="admin" />
+         </div>
+         <div>
+           <label class="text-xs text-slate-300">Password</label>
+           <input id="adminPassword" type="password" required class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="Enter password" />
+         </div>
+       </div>
+       <div class="p-4 border-t border-slate-700 flex justify-end gap-2">
+         <button type="button" id="cancelAdminLogin" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm">Cancel</button>
+         <button type="submit" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm">Login</button>
+       </div>
+     </form>
+   </dialog>
+
+   <script src="js/list.js"></script>
+ </body>
+ </html>

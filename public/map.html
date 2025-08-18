@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Whiteout Spot Organizer - Map</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/tailwind.css">
+  <style>
+    /* Prevent pull-to-refresh jerkiness while panning the grid */
+    html, body { height: 100%; overscroll-behavior: none; }
+    /* Hide number input spinners for a cleaner mobile UI */
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+  </style>
+</head>
+<body class="h-full bg-slate-900 text-slate-100">
+  <div class="mx-auto max-w-screen-xl h-full flex flex-col">
+    <!-- Top Bar -->
+    <header class="sticky top-0 z-50 backdrop-blur bg-slate-900/70 border-b border-slate-800">
+      <div class="px-3 sm:px-4 py-3 flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl font-bold tracking-tight">ZOM WOS Spot Organizer</span>
+          <span class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-indigo-600/30 text-indigo-200 border border-indigo-400/30">Beta</span>
+        </div>
+                 <div class="ml-auto flex items-center gap-3">
+           <label class="text-xs text-slate-300">Zoom</label>
+           <input id="zoom" type="range" min="55" max="200" value="100" class="w-28 accent-indigo-400" />
+           <!-- Hamburger Menu -->
+           <button id="menuBtn" class="p-2 rounded-lg hover:bg-slate-800">
+             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+             </svg>
+           </button>
+         </div>
+      </div>
+      <div class="px-3 sm:px-4 pb-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div class="col-span-2 flex items-center gap-2">
+          <input id="search" placeholder="Search member…" class="w-full text-sm px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          <button id="clearSearch" class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-xs">Clear</button>
+        </div>
+        <div class="flex gap-2">
+          <button id="addCityBtn" class="w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 px-3 py-2 text-sm font-medium">Insert City</button>
+        </div>
+        <div class="flex gap-2">
+          <button id="autoInsertBtn" class="w-full rounded-xl bg-green-600 hover:bg-green-500 px-3 py-2 text-sm font-medium">Auto Insert</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Legend -->
+    <section class="px-3 sm:px-4 py-2 text-xs text-slate-300 flex items-center gap-4">
+      <div class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-pink-500"></span>Occupied</div>
+      <div class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-yellow-400"></span>Reserved</div>
+      <div class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-sky-400"></span>Bear Trap (3×3)</div>
+      <div class="ml-auto flex items-center gap-2">
+        <a href="/list" class="text-indigo-300 hover:text-indigo-200 underline underline-offset-4">List View</a>
+        <button id="clearAllBtn" class="text-red-300 hover:text-red-200 underline underline-offset-4">Clear all</button>
+        <div class="flex items-center gap-1">
+          <span class="text-xs text-slate-400">Mode:</span>
+          <span id="userMode" class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-200">View Only</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Map / Grid -->
+    <main class="flex-1 min-h-0 px-2 sm:px-4 pb-4">
+      <div id="mapScroller" class="relative h-full w-full overflow-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-inner">
+        <!-- "Infinite" canvas: a large square so you can pan around. -->
+        <div id="gridWrapper" class="origin-top-left will-change-transform" style="transform: scale(1)">
+          <div id="grid" class="relative grid" style="--cells: 41; grid-template-columns: repeat(var(--cells), 42px); grid-auto-rows: 42px;"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Bottom help -->
+    <footer class="px-4 py-3 text-xs text-slate-400 border-t border-slate-800">
+      Tap an empty tile to create a city. Tap an existing city to edit or delete. Long‑press (700ms) on a city to quick‑toggle Reserved/Occupied. Data is saved in the database.
+    </footer>
+  </div>
+
+  <!-- Modal -->
+  <dialog id="cityModal" class="rounded-2xl bg-slate-900/95 border border-slate-700 p-0 text-slate-100 w-[96%] sm:w-[420px]">
+    <form id="cityForm" method="dialog">
+      <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+        <h3 id="modalTitle" class="text-lg font-semibold">Add City</h3>
+        <button type="button" id="closeModal" class="p-2 rounded-lg hover:bg-slate-800">✕</button>
+      </div>
+      <div class="p-4 grid grid-cols-2 gap-3">
+        <input type="hidden" id="cityId" />
+        <div class="col-span-2">
+          <label class="text-xs text-slate-300">Member name</label>
+          <input id="name" required class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="e.g. HadesPrime13" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-300">Level</label>
+          <input id="level" type="number" min="1" max="100" class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-300">Status</label>
+          <select id="status" class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2">
+            <option value="occupied">Occupied</option>
+            <option value="reserved">Reserved</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-300">X</label>
+          <input id="x" type="number" class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-300">Y</label>
+          <input id="y" type="number" class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" />
+        </div>
+        <div class="col-span-2">
+          <label class="text-xs text-slate-300">Color</label>
+          <input id="color" type="color" value="#ec4899" class="mt-1 w-full h-10 rounded-xl bg-slate-800 border border-slate-700" />
+        </div>
+        <div class="col-span-2">
+          <label class="text-xs text-slate-300">Notes</label>
+          <textarea id="notes" rows="2" class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="Optional"></textarea>
+        </div>
+      </div>
+      <div class="p-4 border-t border-slate-700 flex justify-between items-center">
+        <div class="flex gap-2">
+          <button value="cancel" type="button" id="deleteBtn" class="hidden px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-sm">Delete</button>
+        </div>
+        <div class="ml-auto flex gap-2">
+          <button value="cancel" type="button" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm">Cancel</button>
+          <button id="saveBtn" value="default" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm">Save</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+     <!-- Hamburger Menu Dropdown -->
+   <div id="menuDropdown" class="hidden absolute top-16 right-4 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-48">
+     <div class="p-2">
+       <a href="/list" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">📋 List View</a>
+       <a href="/history" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">📜 Edit History</a>
+       <a href="/users" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">👥 Users & Audit</a>
+       <hr class="border-slate-600 my-1">
+       <button id="adminLoginBtn" class="block w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">🔐 Admin Login</button>
+       <button id="logoutBtn" class="hidden block w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-slate-700 rounded">🚪 Logout</button>
+     </div>
+   </div>
+
+   <!-- Admin Login Modal -->
+   <dialog id="adminLoginModal" class="rounded-2xl bg-slate-900/95 border border-slate-700 p-0 text-slate-100 w-[96%] sm:w-[420px]">
+     <form id="adminLoginForm" method="dialog">
+       <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+         <h3 class="text-lg font-semibold">Admin Login</h3>
+         <button type="button" id="closeAdminLogin" class="p-2 rounded-lg hover:bg-slate-800">✕</button>
+       </div>
+       <div class="p-4 space-y-4">
+         <div>
+           <label class="text-xs text-slate-300">Username</label>
+           <input id="adminUsername" type="text" required class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="admin" />
+         </div>
+         <div>
+           <label class="text-xs text-slate-300">Password</label>
+           <input id="adminPassword" type="password" required class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="Enter password" />
+         </div>
+       </div>
+       <div class="p-4 border-t border-slate-700 flex justify-end gap-2">
+         <button type="button" id="cancelAdminLogin" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm">Cancel</button>
+         <button type="submit" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm">Login</button>
+       </div>
+     </form>
+   </dialog>
+
+   <script src="js/map.js"></script>
+ </body>
+ </html>
