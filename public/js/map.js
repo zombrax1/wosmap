@@ -2,11 +2,12 @@
 const GRID_CELLS = 41; // odd number so we have a single center cell
 const CENTER = Math.floor(GRID_CELLS / 2);
 const BEAR_TRAP_SIZE = 2;
-const BEAR_TRAPS = [
-  { name: '1', topLeft: { x: 0, y: 0 } },
-  { name: '2', topLeft: { x: 5, y: 5 } }
-];
-let activeBearTrap = 0;
+const BEAR_TRAP_COUNT = 2;
+let bearTraps = JSON.parse(localStorage.getItem('bearTraps') || '[]');
+if (bearTraps.length < BEAR_TRAP_COUNT) {
+  bearTraps = Array.from({ length: BEAR_TRAP_COUNT }, (_, i) => bearTraps[i] || null);
+}
+let selectedBearTrap = null;
 
 /** @type {Array<{id:string,name:string,level?:number,status:'occupied'|'reserved',x:number,y:number,notes?:string,color:string}>} */
 let cities = [];
@@ -164,8 +165,8 @@ async function toggleStatus(id) {
 }
 
 // ===== Init grid =====
-function getBearTrapCells(index) {
-  const { topLeft } = BEAR_TRAPS[index];
+function getBearTrapCells(topLeft) {
+  if (!topLeft) return [];
   const cells = [];
   for (let dx = 0; dx < BEAR_TRAP_SIZE; dx++) {
     for (let dy = 0; dy < BEAR_TRAP_SIZE; dy++) {
@@ -175,11 +176,13 @@ function getBearTrapCells(index) {
   return cells;
 }
 
-function highlightBearTrap() {
+function highlightBearTraps() {
   grid.querySelectorAll('.bear-trap-area').forEach(c => c.classList.remove('bear-trap-area'));
-  for (const { x, y } of getBearTrapCells(activeBearTrap)) {
-    const cell = grid.querySelector(`[data-x="${x}"][data-y="${y}"]`);
-    if (cell) cell.classList.add('bear-trap-area');
+  for (const trap of bearTraps) {
+    for (const { x, y } of getBearTrapCells(trap)) {
+      const cell = grid.querySelector(`[data-x="${x}"][data-y="${y}"]`);
+      if (cell) cell.classList.add('bear-trap-area');
+    }
   }
 }
 
@@ -203,8 +206,19 @@ function buildGrid() {
       cell.dataset.x = x;
       cell.dataset.y = y;
 
-      // Click to add / edit (admin only)
+      // Click to place/remove bear traps or manage cities
       cell.addEventListener('click', (e) => {
+        if (isAdmin && selectedBearTrap !== null) {
+          const trap = bearTraps[selectedBearTrap];
+          const insideTrap = trap &&
+            x >= trap.x && x < trap.x + BEAR_TRAP_SIZE &&
+            y >= trap.y && y < trap.y + BEAR_TRAP_SIZE;
+          bearTraps[selectedBearTrap] = insideTrap ? null : { x, y };
+          localStorage.setItem('bearTraps', JSON.stringify(bearTraps));
+          highlightBearTraps();
+          return;
+        }
+
         const existing = cities.find(c => c.x === x && c.y === y);
         if (existing) {
           if (isAdmin) {
@@ -212,17 +226,15 @@ function buildGrid() {
           } else {
             showCityInfo(existing);
           }
-        } else {
-          if (isAdmin) {
-            openCreateAt(x, y);
-          }
+        } else if (isAdmin) {
+          openCreateAt(x, y);
         }
       });
 
       grid.appendChild(cell);
     }
   }
-  highlightBearTrap();
+  highlightBearTraps();
 }
 
 // ===== Render cities =====
@@ -438,8 +450,8 @@ zoom.addEventListener('input', () => {
 });
 
 bearTrapSelect.addEventListener('change', (e) => {
-  activeBearTrap = Number(e.target.value);
-  highlightBearTrap();
+  const value = e.target.value;
+  selectedBearTrap = value === '' ? null : Number(value);
 });
 
 // Center view on the grid at start
@@ -509,8 +521,10 @@ function runTests() {
   console.assert(centerCell.dataset.x === '0' && centerCell.dataset.y === '0', 'Center cell should be at (0,0)');
   
   // Test 3: Check if bear trap area is highlighted
+  bearTraps[0] = { x: 0, y: 0 };
+  highlightBearTraps();
   const bearTrapCell = grid.querySelector('[data-x="0"][data-y="0"]');
-  console.assert(bearTrapCell && bearTrapCell.classList.contains('bear-trap-area'), 'Selected bear trap cells should be highlighted');
+  console.assert(bearTrapCell && bearTrapCell.classList.contains('bear-trap-area'), 'Bear trap cells should be highlighted');
   
   console.log('All self-tests passed!');
 }

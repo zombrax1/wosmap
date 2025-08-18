@@ -2,10 +2,11 @@
 const GRID_CELLS = 41; // odd number so we have a single center cell
 const CENTER = Math.floor(GRID_CELLS / 2);
 const BEAR_TRAP_SIZE = 2;
-const BEAR_TRAPS = [
-  { topLeft: { x: 0, y: 0 } },
-  { topLeft: { x: 5, y: 5 } }
-];
+const BEAR_TRAP_COUNT = 2;
+let bearTraps = JSON.parse(localStorage.getItem('bearTraps') || '[]');
+if (bearTraps.length < BEAR_TRAP_COUNT) {
+  bearTraps = Array.from({ length: BEAR_TRAP_COUNT }, (_, i) => bearTraps[i] || null);
+}
 
 /** @type {Array<{id:string,name:string,level?:number,status:'occupied'|'reserved',x:number,y:number,notes?:string,color:string}>} */
 let cities = [];
@@ -171,9 +172,10 @@ function filterCities() {
 
 // ===== Map rendering =====
 function isBearTrapCell(x, y) {
-  return BEAR_TRAPS.some(({ topLeft }) =>
-    x >= topLeft.x && x < topLeft.x + BEAR_TRAP_SIZE &&
-    y >= topLeft.y && y < topLeft.y + BEAR_TRAP_SIZE
+  return bearTraps.some(trap =>
+    trap &&
+    x >= trap.x && x < trap.x + BEAR_TRAP_SIZE &&
+    y >= trap.y && y < trap.y + BEAR_TRAP_SIZE
   );
 }
 
