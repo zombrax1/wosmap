@@ -21,6 +21,44 @@ afterAll(() => {
 });
 
 describe('Authentication and user permissions', () => {
+  test('login accepts form data', async () => {
+    await request(app)
+      .post('/api/login')
+      .type('form')
+      .send(ADMIN_CREDENTIALS)
+      .expect(200);
+  });
+
+  test('viewer cannot add users', async () => {
+    const adminLogin = await request(app)
+      .post('/api/login')
+      .send(ADMIN_CREDENTIALS);
+    const adminCookie = adminLogin.headers['set-cookie'];
+
+    await request(app)
+      .post('/api/users')
+      .set('Cookie', adminCookie)
+      .send({
+        id: 'viewer1',
+        username: 'viewer1',
+        password: 'pw',
+        role: 'viewer',
+      })
+      .expect(200);
+
+    const viewerLogin = await request(app)
+      .post('/api/login')
+      .type('form')
+      .send({ username: 'viewer1', password: 'pw' });
+    const viewerCookie = viewerLogin.headers['set-cookie'];
+
+    await request(app)
+      .post('/api/users')
+      .set('Cookie', viewerCookie)
+      .send({ id: 'u2', username: 'u2', password: 'pw', role: 'viewer' })
+      .expect(403);
+  });
+
   test('admin can delete a user', async () => {
     const loginRes = await request(app)
       .post('/api/login')
