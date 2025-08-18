@@ -2,7 +2,8 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 
-const DEFAULT_DB_NAME = 'wos.db';
+const DB_EXTENSION = '.db';
+const DEFAULT_DB_NAME = `wos${DB_EXTENSION}`;
 const BCRYPT_ROUNDS = 10;
 const DEFAULT_ADMIN = {
   id: 'admin',
@@ -12,7 +13,7 @@ const DEFAULT_ADMIN = {
 };
 
 const envPath = process.env.DB_PATH || DEFAULT_DB_NAME;
-const DB_PATH = path.extname(envPath) === '.db' ? envPath : `${envPath}.db`;
+const DB_PATH = path.extname(envPath) === DB_EXTENSION ? envPath : `${envPath}${DB_EXTENSION}`;
 
 const TABLES = {
   CITIES: 'cities',
