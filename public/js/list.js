@@ -1,6 +1,13 @@
 // ===== Model =====
 const GRID_CELLS = 41; // odd number so we have a single center cell
 const CENTER = Math.floor(GRID_CELLS / 2);
+const BEAR_TRAP_SIZE = 2;
+const BEAR_TRAP_COUNT = 2;
+const BEAR_TRAP_STORAGE_KEY = 'bearTraps';
+let bearTraps = JSON.parse(localStorage.getItem(BEAR_TRAP_STORAGE_KEY) || '[]');
+if (bearTraps.length < BEAR_TRAP_COUNT) {
+  bearTraps = Array.from({ length: BEAR_TRAP_COUNT }, (_, i) => bearTraps[i] || null);
+}
 
 /** @type {Array<{id:string,name:string,level?:number,status:'occupied'|'reserved',x:number,y:number,notes?:string,color:string}>} */
 let cities = [];
@@ -92,10 +99,10 @@ async function loadCities() {
   }
 }
 
-async function saveCity(cityData) {
+async function saveCity(cityData, isNew) {
   try {
-    const method = cityData.id ? 'PUT' : 'POST';
-    const url = cityData.id ? `/api/cities/${cityData.id}` : '/api/cities';
+    const method = isNew ? 'POST' : 'PUT';
+    const url = isNew ? '/api/cities' : `/api/cities/${cityData.id}`;
     
     const response = await fetch(url, {
       method,
@@ -165,6 +172,14 @@ function filterCities() {
 }
 
 // ===== Map rendering =====
+function isBearTrapCell(x, y) {
+  return bearTraps.some(trap =>
+    trap &&
+    x >= trap.x && x < trap.x + BEAR_TRAP_SIZE &&
+    y >= trap.y && y < trap.y + BEAR_TRAP_SIZE
+  );
+}
+
 function buildGrid() {
   grid.style.setProperty('--cells', GRID_CELLS);
   grid.innerHTML = '';
@@ -176,8 +191,8 @@ function buildGrid() {
       const cell = document.createElement('div');
       cell.className = 'relative select-none border border-slate-800/40';
 
-      // Bear Trap 3x3 highlight centered at 0,0
-      if (Math.abs(x) <= 1 && Math.abs(y) <= 1) {
+      // Bear Trap 2x2 highlight
+      if (isBearTrapCell(x, y)) {
         cell.classList.add('bear-trap-area');
       } else {
         cell.classList.add('bg-slate-900');
@@ -353,6 +368,7 @@ document.getElementById('closeModal').addEventListener('click', () => cityModal.
 
 cityForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const isNew = !idEl.value;
   const id = idEl.value || crypto.randomUUID();
   const payload = {
     id,
@@ -365,7 +381,7 @@ cityForm.addEventListener('submit', async (e) => {
     color: colorEl.value
   };
 
-  const success = await saveCity(payload);
+  const success = await saveCity(payload, isNew);
   if (success) {
     cityModal.close();
   }
@@ -428,7 +444,7 @@ autoInsertBtn.addEventListener('click', async () => {
     color: '#ec4899'
   };
   
-  const success = await saveCity(cityData);
+  const success = await saveCity(cityData, true);
   if (success) {
     alert(`City "${name}" auto-inserted at (${x}, ${y})`);
   }
