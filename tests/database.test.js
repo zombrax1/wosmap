@@ -29,6 +29,7 @@ function createTestDB() {
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL,
+      password TEXT NOT NULL,
       role TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS audit_logs (
@@ -304,23 +305,31 @@ describe('Database CRUD Operations', () => {
   
   describe('User operations', () => {
     test('should insert and retrieve a user', () => {
-      const stmt = db.prepare(`INSERT INTO users (id, username, role) VALUES (?, ?, ?)`);
-      const result = stmt.run('user-1', 'Alice', 'admin');
+      const stmt = db.prepare(
+        `INSERT INTO users (id, username, password, role) VALUES (?, ?, ?, ?)`
+      );
+      const result = stmt.run('user-1', 'Alice', 'secret', 'admin');
       expect(result.changes).toBe(1);
       const user = db.prepare('SELECT * FROM users WHERE id = ?').get('user-1');
       expect(user.username).toBe('Alice');
+      expect(user.password).toBe('secret');
       expect(user.role).toBe('admin');
     });
 
     test('should update and delete a user', () => {
-      const insert = db.prepare(`INSERT INTO users (id, username, role) VALUES (?, ?, ?)`);
-      insert.run('user-2', 'Bob', 'viewer');
+      const insert = db.prepare(
+        `INSERT INTO users (id, username, password, role) VALUES (?, ?, ?, ?)`
+      );
+      insert.run('user-2', 'Bob', 'pw', 'viewer');
 
-      const update = db.prepare(`UPDATE users SET username = ?, role = ? WHERE id = ?`);
-      const updateResult = update.run('Bobby', 'admin', 'user-2');
+      const update = db.prepare(
+        `UPDATE users SET username = ?, password = ?, role = ? WHERE id = ?`
+      );
+      const updateResult = update.run('Bobby', 'newpw', 'admin', 'user-2');
       expect(updateResult.changes).toBe(1);
       const updated = db.prepare('SELECT * FROM users WHERE id = ?').get('user-2');
       expect(updated.username).toBe('Bobby');
+      expect(updated.password).toBe('newpw');
       expect(updated.role).toBe('admin');
 
       const del = db.prepare(`DELETE FROM users WHERE id = ?`);

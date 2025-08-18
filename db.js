@@ -1,6 +1,19 @@
+const path = require('path');
 const Database = require('better-sqlite3');
+const bcrypt = require('bcryptjs');
 
-const DB_PATH = process.env.DB_PATH || 'wos.db';
+const DB_EXTENSION = '.db';
+const DEFAULT_DB_NAME = `wos${DB_EXTENSION}`;
+const BCRYPT_ROUNDS = 10;
+const DEFAULT_ADMIN = {
+  id: 'admin',
+  username: 'admin',
+  password: 'admin',
+  role: 'admin',
+};
+
+const envPath = process.env.DB_PATH || DEFAULT_DB_NAME;
+const DB_PATH = path.extname(envPath) === DB_EXTENSION ? envPath : `${envPath}${DB_EXTENSION}`;
 
 const TABLES = {
   CITIES: 'cities',
@@ -35,6 +48,7 @@ function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS ${TABLES.USERS} (
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL,
+      password TEXT NOT NULL,
       role TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS ${TABLES.AUDIT} (
@@ -45,6 +59,23 @@ function initializeDatabase() {
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  const adminExists = getQuery(
+    `SELECT 1 FROM ${TABLES.USERS} WHERE username = ?`,
+    [DEFAULT_ADMIN.username]
+  );
+
+  if (!adminExists) {
+    runQuery(
+      `INSERT INTO ${TABLES.USERS} (id, username, password, role) VALUES (?, ?, ?, ?)`,
+      [
+        DEFAULT_ADMIN.id,
+        DEFAULT_ADMIN.username,
+        bcrypt.hashSync(DEFAULT_ADMIN.password, BCRYPT_ROUNDS),
+        DEFAULT_ADMIN.role,
+      ]
+    );
+  }
 }
 
 function clearDatabase() {
@@ -69,4 +100,5 @@ module.exports = {
   logAudit,
   initializeDatabase,
   clearDatabase,
+  db,
 };

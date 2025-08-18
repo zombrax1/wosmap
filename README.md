@@ -62,7 +62,11 @@ A multi-page web application for organizing spots on a grid map, built with Node
    npm start
    ```
 
-4. **Access the application**
+4. **Log in**
+   - Default admin credentials: `admin` / `admin`
+   - Authenticate via `POST /api/login`
+
+5. **Access the application**
    - Main page: http://localhost:3000
    - Map view: http://localhost:3000/map
    - List view: http://localhost:3000/list
