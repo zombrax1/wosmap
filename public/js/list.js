@@ -1,6 +1,11 @@
 // ===== Model =====
 const GRID_CELLS = 41; // odd number so we have a single center cell
 const CENTER = Math.floor(GRID_CELLS / 2);
+const BEAR_TRAP_SIZE = 2;
+const BEAR_TRAPS = [
+  { topLeft: { x: 0, y: 0 } },
+  { topLeft: { x: 5, y: 5 } }
+];
 
 /** @type {Array<{id:string,name:string,level?:number,status:'occupied'|'reserved',x:number,y:number,notes?:string,color:string}>} */
 let cities = [];
@@ -165,6 +170,13 @@ function filterCities() {
 }
 
 // ===== Map rendering =====
+function isBearTrapCell(x, y) {
+  return BEAR_TRAPS.some(({ topLeft }) =>
+    x >= topLeft.x && x < topLeft.x + BEAR_TRAP_SIZE &&
+    y >= topLeft.y && y < topLeft.y + BEAR_TRAP_SIZE
+  );
+}
+
 function buildGrid() {
   grid.style.setProperty('--cells', GRID_CELLS);
   grid.innerHTML = '';
@@ -176,8 +188,8 @@ function buildGrid() {
       const cell = document.createElement('div');
       cell.className = 'relative select-none border border-slate-800/40';
 
-      // Bear Trap 3x3 highlight centered at 0,0
-      if (Math.abs(x) <= 1 && Math.abs(y) <= 1) {
+      // Bear Trap 2x2 highlight
+      if (isBearTrapCell(x, y)) {
         cell.classList.add('bear-trap-area');
       } else {
         cell.classList.add('bg-slate-900');

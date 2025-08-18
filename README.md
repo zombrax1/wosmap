@@ -31,7 +31,7 @@ A multi-page web application for organizing spots on a grid map, built with Node
 - **Responsive Design**: Mobile-first approach with TailwindCSS
 - **Mobile Optimization**: Smaller grid and touch-friendly interface on mobile
 - **Zoom Control**: Adjustable zoom level (55% - 200%)
-- **Bear Trap Highlight**: 3x3 area centered at (0,0) highlighted
+- **Bear Trap Highlight**: selectable 2×2 zones
 - **Hover Effects**: Interactive highlighting and tooltips
 - **Modal Dialogs**: Clean add/edit interface
 - **Real-time Updates**: Instant reflection of changes

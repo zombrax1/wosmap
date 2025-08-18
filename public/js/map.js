@@ -1,6 +1,12 @@
 // ===== Model =====
 const GRID_CELLS = 41; // odd number so we have a single center cell
 const CENTER = Math.floor(GRID_CELLS / 2);
+const BEAR_TRAP_SIZE = 2;
+const BEAR_TRAPS = [
+  { name: '1', topLeft: { x: 0, y: 0 } },
+  { name: '2', topLeft: { x: 5, y: 5 } }
+];
+let activeBearTrap = 0;
 
 /** @type {Array<{id:string,name:string,level?:number,status:'occupied'|'reserved',x:number,y:number,notes?:string,color:string}>} */
 let cities = [];
@@ -83,6 +89,7 @@ const searchInput = document.getElementById('search');
 document.getElementById('clearSearch').addEventListener('click', ()=>{ searchInput.value=''; render(); });
 
 const zoom = document.getElementById('zoom');
+const bearTrapSelect = document.getElementById('bearTrapSelect');
 
 // Form fields
 const idEl = document.getElementById('cityId');
@@ -157,6 +164,25 @@ async function toggleStatus(id) {
 }
 
 // ===== Init grid =====
+function getBearTrapCells(index) {
+  const { topLeft } = BEAR_TRAPS[index];
+  const cells = [];
+  for (let dx = 0; dx < BEAR_TRAP_SIZE; dx++) {
+    for (let dy = 0; dy < BEAR_TRAP_SIZE; dy++) {
+      cells.push({ x: topLeft.x + dx, y: topLeft.y + dy });
+    }
+  }
+  return cells;
+}
+
+function highlightBearTrap() {
+  grid.querySelectorAll('.bear-trap-area').forEach(c => c.classList.remove('bear-trap-area'));
+  for (const { x, y } of getBearTrapCells(activeBearTrap)) {
+    const cell = grid.querySelector(`[data-x="${x}"][data-y="${y}"]`);
+    if (cell) cell.classList.add('bear-trap-area');
+  }
+}
+
 function buildGrid() {
   grid.style.setProperty('--cells', GRID_CELLS);
   grid.innerHTML = '';
@@ -166,14 +192,7 @@ function buildGrid() {
       const x = col - CENTER; // cartesian coords with 0,0 center
       const y = row - CENTER;
       const cell = document.createElement('div');
-      cell.className = 'relative select-none border border-slate-800/40';
-
-      // Bear Trap 3x3 highlight centered at 0,0
-      if (Math.abs(x) <= 1 && Math.abs(y) <= 1) {
-        cell.classList.add('bear-trap-area');
-      } else {
-        cell.classList.add('bg-slate-900');
-      }
+      cell.className = 'relative select-none border border-slate-800/40 bg-slate-900';
 
       // Coord label (tiny)
       const label = document.createElement('div');
@@ -203,6 +222,7 @@ function buildGrid() {
       grid.appendChild(cell);
     }
   }
+  highlightBearTrap();
 }
 
 // ===== Render cities =====
@@ -417,6 +437,11 @@ zoom.addEventListener('input', () => {
   gridWrapper.style.transform = `scale(${scale})`;
 });
 
+bearTrapSelect.addEventListener('change', (e) => {
+  activeBearTrap = Number(e.target.value);
+  highlightBearTrap();
+});
+
 // Center view on the grid at start
 function centerView() {
   const cellSize = 42 * (Number(zoom.value) / 100);
@@ -484,8 +509,8 @@ function runTests() {
   console.assert(centerCell.dataset.x === '0' && centerCell.dataset.y === '0', 'Center cell should be at (0,0)');
   
   // Test 3: Check if bear trap area is highlighted
-  const bearTrapCell = grid.children[CENTER * GRID_CELLS + CENTER];
-  console.assert(bearTrapCell.classList.contains('bear-trap-area'), 'Center cell should have bear trap styling');
+  const bearTrapCell = grid.querySelector('[data-x="0"][data-y="0"]');
+  console.assert(bearTrapCell && bearTrapCell.classList.contains('bear-trap-area'), 'Selected bear trap cells should be highlighted');
   
   console.log('All self-tests passed!');
 }
