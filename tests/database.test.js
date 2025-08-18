@@ -14,7 +14,7 @@ function createTestDB() {
   
   const db = new Database(TEST_DB_PATH);
   
-  // Create cities table
+  // Create tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS cities (
       id TEXT PRIMARY KEY,
@@ -25,7 +25,19 @@ function createTestDB() {
       y INTEGER NOT NULL,
       notes TEXT,
       color TEXT DEFAULT '#ec4899'
-    )
+    );
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL,
+      role TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity TEXT NOT NULL,
+      action TEXT NOT NULL,
+      entity_id TEXT,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
   
   return db;
@@ -287,6 +299,48 @@ describe('Database CRUD Operations', () => {
       expect(city.name).toBe('UpdatedCity');
       expect(city.x).toBe(5);
       expect(city.y).toBe(5);
+    });
+  });
+  
+  describe('User operations', () => {
+    test('should insert and retrieve a user', () => {
+      const stmt = db.prepare(`INSERT INTO users (id, username, role) VALUES (?, ?, ?)`);
+      const result = stmt.run('user-1', 'Alice', 'admin');
+      expect(result.changes).toBe(1);
+      const user = db.prepare('SELECT * FROM users WHERE id = ?').get('user-1');
+      expect(user.username).toBe('Alice');
+      expect(user.role).toBe('admin');
+    });
+
+    test('should update and delete a user', () => {
+      const insert = db.prepare(`INSERT INTO users (id, username, role) VALUES (?, ?, ?)`);
+      insert.run('user-2', 'Bob', 'viewer');
+
+      const update = db.prepare(`UPDATE users SET username = ?, role = ? WHERE id = ?`);
+      const updateResult = update.run('Bobby', 'admin', 'user-2');
+      expect(updateResult.changes).toBe(1);
+      const updated = db.prepare('SELECT * FROM users WHERE id = ?').get('user-2');
+      expect(updated.username).toBe('Bobby');
+      expect(updated.role).toBe('admin');
+
+      const del = db.prepare(`DELETE FROM users WHERE id = ?`);
+      const delResult = del.run('user-2');
+      expect(delResult.changes).toBe(1);
+      const none = db.prepare('SELECT * FROM users WHERE id = ?').get('user-2');
+      expect(none).toBeUndefined();
+    });
+  });
+
+  describe('Audit log operations', () => {
+    test('should record an audit entry', () => {
+      const stmt = db.prepare(`INSERT INTO audit_logs (entity, action, entity_id) VALUES (?, ?, ?)`);
+      const result = stmt.run('cities', 'create', 'city-1');
+      expect(result.changes).toBe(1);
+      const logs = db.prepare('SELECT * FROM audit_logs').all();
+      expect(logs).toHaveLength(1);
+      expect(logs[0].entity).toBe('cities');
+      expect(logs[0].action).toBe('create');
+      expect(logs[0].entity_id).toBe('city-1');
     });
   });
 });
