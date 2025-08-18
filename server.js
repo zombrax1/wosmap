@@ -19,12 +19,14 @@ const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'wosmap-secret';
 const BCRYPT_ROUNDS = 10;
 const USER_MANAGEMENT_ROLES = ['admin', 'moderator'];
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(express.static(PUBLIC_DIR));
 app.use(
   session({
     secret: SESSION_SECRET,
@@ -307,19 +309,19 @@ app.post('/api/import', requireRole(...USER_MANAGEMENT_ROLES), (req, res) => {
 
 // Serve pages
 app.get('/map', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'map.html'));
+  res.sendFile(path.join(PUBLIC_DIR, 'map.html'));
 });
 
 app.get('/list', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'list.html'));
+  res.sendFile(path.join(PUBLIC_DIR, 'list.html'));
 });
 
 app.get('/history', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'history.html'));
+  res.sendFile(path.join(PUBLIC_DIR, 'history.html'));
 });
 
 app.get('/users', requireRole(...USER_MANAGEMENT_ROLES), (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'users.html'));
+  res.sendFile(path.join(PUBLIC_DIR, 'users.html'));
 });
 
 app.get('/', (req, res) => {
