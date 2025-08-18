@@ -1,30 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const {
-  TABLES,
-  ACTIONS,
-  runQuery,
-  getQuery,
-  allQuery,
-  logAudit,
-  initializeDatabase,
-  clearDatabase,
-} = require('./db');
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.static('public'));
 
-// Initialize database and optionally clear existing data
-initializeDatabase();
-if (process.env.RESET_DB === 'true') {
-  clearDatabase();
-}
 
 // API Routes
 app.get('/api/cities', (req, res) => {
