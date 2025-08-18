@@ -21,6 +21,8 @@ const TABLES = {
   AUDIT: 'audit_logs',
 };
 
+const USER_PASSWORD_COLUMN = 'password';
+
 const ACTIONS = {
   CREATE: 'create',
   UPDATE: 'update',
@@ -45,12 +47,6 @@ function initializeDatabase() {
       notes TEXT,
       color TEXT DEFAULT '#ec4899'
     );
-    CREATE TABLE IF NOT EXISTS ${TABLES.USERS} (
-      id TEXT PRIMARY KEY,
-      username TEXT NOT NULL,
-      password TEXT NOT NULL,
-      role TEXT NOT NULL
-    );
     CREATE TABLE IF NOT EXISTS ${TABLES.AUDIT} (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       entity TEXT NOT NULL,
@@ -60,20 +56,57 @@ function initializeDatabase() {
     );
   `);
 
-  const adminExists = getQuery(
-    `SELECT 1 FROM ${TABLES.USERS} WHERE username = ?`,
+  ensureUsersTable();
+
+  const admin = getQuery(
+    `SELECT ${USER_PASSWORD_COLUMN} FROM ${TABLES.USERS} WHERE username = ?`,
     [DEFAULT_ADMIN.username]
   );
 
-  if (!adminExists) {
+  if (!admin) {
     runQuery(
-      `INSERT INTO ${TABLES.USERS} (id, username, password, role) VALUES (?, ?, ?, ?)`,
+      `INSERT INTO ${TABLES.USERS} (id, username, ${USER_PASSWORD_COLUMN}, role) VALUES (?, ?, ?, ?)`,
       [
         DEFAULT_ADMIN.id,
         DEFAULT_ADMIN.username,
         bcrypt.hashSync(DEFAULT_ADMIN.password, BCRYPT_ROUNDS),
         DEFAULT_ADMIN.role,
       ]
+    );
+  } else if (!admin[USER_PASSWORD_COLUMN]) {
+    runQuery(
+      `UPDATE ${TABLES.USERS} SET ${USER_PASSWORD_COLUMN} = ? WHERE username = ?`,
+      [
+        bcrypt.hashSync(DEFAULT_ADMIN.password, BCRYPT_ROUNDS),
+        DEFAULT_ADMIN.username,
+      ]
+    );
+  }
+}
+
+function ensureUsersTable() {
+  const tableInfo = db
+    .prepare(`PRAGMA table_info(${TABLES.USERS})`)
+    .all();
+
+  if (tableInfo.length === 0) {
+    db.exec(`
+      CREATE TABLE ${TABLES.USERS} (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL,
+        ${USER_PASSWORD_COLUMN} TEXT NOT NULL,
+        role TEXT NOT NULL
+      );
+    `);
+    return;
+  }
+
+  const hasPassword = tableInfo.some(
+    (column) => column.name === USER_PASSWORD_COLUMN
+  );
+  if (!hasPassword) {
+    db.exec(
+      `ALTER TABLE ${TABLES.USERS} ADD COLUMN ${USER_PASSWORD_COLUMN} TEXT NOT NULL DEFAULT ''`
     );
   }
 }
