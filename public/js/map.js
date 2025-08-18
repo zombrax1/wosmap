@@ -29,19 +29,23 @@ function updateUIForUser() {
   const addCityBtn = document.getElementById('addCityBtn');
   const autoInsertBtn = document.getElementById('autoInsertBtn');
   const clearAllBtn = document.getElementById('clearAllBtn');
-  
+
   if (isAdmin) {
     userModeEl.textContent = 'Admin';
     userModeEl.className = 'text-xs px-2 py-1 rounded bg-green-700 text-green-200';
     addCityBtn.style.display = 'block';
     autoInsertBtn.style.display = 'block';
     clearAllBtn.style.display = 'block';
+    bearTrapSelect.disabled = false;
+    clearTrapBtn.disabled = selectedBearTrap === null || !bearTraps[selectedBearTrap];
   } else {
     userModeEl.textContent = 'View Only';
     userModeEl.className = 'text-xs px-2 py-1 rounded bg-slate-700 text-slate-200';
     addCityBtn.style.display = 'none';
     autoInsertBtn.style.display = 'none';
     clearAllBtn.style.display = 'none';
+    bearTrapSelect.disabled = true;
+    clearTrapBtn.disabled = true;
   }
 }
 
@@ -91,6 +95,7 @@ document.getElementById('clearSearch').addEventListener('click', ()=>{ searchInp
 
 const zoom = document.getElementById('zoom');
 const bearTrapSelect = document.getElementById('bearTrapSelect');
+const clearTrapBtn = document.getElementById('clearTrapBtn');
 
 // Form fields
 const idEl = document.getElementById('cityId');
@@ -186,6 +191,14 @@ function highlightBearTraps() {
   }
 }
 
+function clearSelectedTrap() {
+  if (selectedBearTrap === null) return;
+  bearTraps[selectedBearTrap] = null;
+  localStorage.setItem('bearTraps', JSON.stringify(bearTraps));
+  highlightBearTraps();
+  clearTrapBtn.disabled = true;
+}
+
 function buildGrid() {
   grid.style.setProperty('--cells', GRID_CELLS);
   grid.innerHTML = '';
@@ -209,13 +222,10 @@ function buildGrid() {
       // Click to place/remove bear traps or manage cities
       cell.addEventListener('click', (e) => {
         if (isAdmin && selectedBearTrap !== null) {
-          const trap = bearTraps[selectedBearTrap];
-          const insideTrap = trap &&
-            x >= trap.x && x < trap.x + BEAR_TRAP_SIZE &&
-            y >= trap.y && y < trap.y + BEAR_TRAP_SIZE;
-          bearTraps[selectedBearTrap] = insideTrap ? null : { x, y };
+          bearTraps[selectedBearTrap] = { x, y };
           localStorage.setItem('bearTraps', JSON.stringify(bearTraps));
           highlightBearTraps();
+          clearTrapBtn.disabled = false;
           return;
         }
 
@@ -452,6 +462,12 @@ zoom.addEventListener('input', () => {
 bearTrapSelect.addEventListener('change', (e) => {
   const value = e.target.value;
   selectedBearTrap = value === '' ? null : Number(value);
+  clearTrapBtn.disabled = selectedBearTrap === null || !bearTraps[selectedBearTrap];
+});
+
+clearTrapBtn.addEventListener('click', () => {
+  if (!isAdmin) return;
+  clearSelectedTrap();
 });
 
 // Center view on the grid at start

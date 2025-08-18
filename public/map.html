@@ -62,7 +62,8 @@
           <option value="0">Trap 1</option>
           <option value="1">Trap 2</option>
         </select>
-        <span class="ml-1 text-slate-400">(click to set/remove)</span>
+        <button id="clearTrapBtn" disabled class="ml-1 px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 text-xs">Delete</button>
+        <span class="ml-1 text-slate-400">(click map to set, Delete to clear)</span>
       </div>
       <div class="ml-auto flex items-center gap-2">
         <a href="/list" class="text-indigo-300 hover:text-indigo-200 underline underline-offset-4">List View</a>
@@ -86,7 +87,7 @@
 
     <!-- Bottom help -->
     <footer class="px-4 py-3 text-xs text-slate-400 border-t border-slate-800">
-      Tap an empty tile to create a city. Tap an existing city to edit or delete. Long‑press (700ms) on a city to quick‑toggle Reserved/Occupied. Select a bear trap above then click the map to set or remove it. Data is saved in the database.
+      Tap an empty tile to create a city. Tap an existing city to edit or delete. Long‑press (700ms) on a city to quick‑toggle Reserved/Occupied. Select a bear trap above, click the map to place it, or use Delete to remove it. Data is saved in the database.
     </footer>
   </div>
 
