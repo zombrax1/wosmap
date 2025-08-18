@@ -1,70 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const Database = require('better-sqlite3');
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Table names and audit actions
-const TABLES = {
-  CITIES: 'cities',
-  USERS: 'users',
-  AUDIT: 'audit_logs',
-};
 
-const ACTIONS = {
-  CREATE: 'create',
-  UPDATE: 'update',
-  DELETE: 'delete',
-};
-
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.static('public'));
-
-// Database setup
-const db = new Database('wos.db');
-
-// Helper query functions
-const runQuery = (sql, params = []) => db.prepare(sql).run(...params);
-const getQuery = (sql, params = []) => db.prepare(sql).get(...params);
-const allQuery = (sql, params = []) => db.prepare(sql).all(...params);
-
-// Audit logger
-const logAudit = (entity, action, entityId) => {
-  runQuery(
-    `INSERT INTO ${TABLES.AUDIT} (entity, action, entity_id) VALUES (?, ?, ?)`,
-    [entity, action, entityId]
-  );
-};
-
-// Create tables if they don't exist
-db.exec(`
-  CREATE TABLE IF NOT EXISTS ${TABLES.CITIES} (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    level INTEGER,
-    status TEXT NOT NULL DEFAULT 'occupied',
-    x INTEGER NOT NULL,
-    y INTEGER NOT NULL,
-    notes TEXT,
-    color TEXT DEFAULT '#ec4899'
-  );
-  CREATE TABLE IF NOT EXISTS ${TABLES.USERS} (
-    id TEXT PRIMARY KEY,
-    username TEXT NOT NULL,
-    role TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS ${TABLES.AUDIT} (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    entity TEXT NOT NULL,
-    action TEXT NOT NULL,
-    entity_id TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
 
 // API Routes
 app.get('/api/cities', (req, res) => {

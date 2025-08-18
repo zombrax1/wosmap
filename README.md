@@ -79,12 +79,19 @@ npm run dev
 npm test
 ```
 
+### Resetting the database
+Set the `RESET_DB` environment variable to clear existing data when the server
+starts:
+
+```bash
+RESET_DB=true npm start
+```
+
 ### Project Structure
 ```
 whiteout-spot-organizer/
 ├── server.js              # Express server with API routes
 ├── package.json           # Dependencies and scripts
-├── wos.db                 # SQLite database (created automatically)
 ├── public/                # Static files
 │   ├── map.html          # Map view page
 │   ├── list.html         # List view page
