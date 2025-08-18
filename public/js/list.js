@@ -10,23 +10,10 @@ let filteredCities = [];
 let isAdmin = false;
 let currentUser = 'viewer';
 
-// Check if user is admin (you can modify this logic)
-function checkAdminStatus() {
-  // For demo purposes, check URL parameter or localStorage
-  const urlParams = new URLSearchParams(window.location.search);
-  const adminParam = urlParams.get('admin');
-  const storedUser = localStorage.getItem('wos-user');
-  
-  if (adminParam === 'true' || storedUser === 'admin') {
-    isAdmin = true;
-    currentUser = 'admin';
-    localStorage.setItem('wos-user', 'admin');
-  } else {
-    isAdmin = false;
-    currentUser = 'viewer';
-    localStorage.setItem('wos-user', 'viewer');
-  }
-  
+async function checkAdminStatus() {
+  const user = await Auth.fetchUser();
+  isAdmin = Auth.isManager();
+  currentUser = user ? user.username : 'viewer';
   updateUIForUser();
 }
 
@@ -494,33 +481,27 @@ adminLoginBtn.addEventListener('click', () => {
   adminLoginModal.showModal();
 });
 
-logoutBtn.addEventListener('click', () => {
+logoutBtn.addEventListener('click', async () => {
   menuDropdown.classList.add('hidden');
-  localStorage.removeItem('wos-user');
-  localStorage.removeItem('wos-admin-token');
-  checkAdminStatus();
+  await Auth.logout();
+  await checkAdminStatus();
   alert('Logged out successfully');
 });
 
 closeAdminLogin.addEventListener('click', () => adminLoginModal.close());
 cancelAdminLogin.addEventListener('click', () => adminLoginModal.close());
 
-adminLoginForm.addEventListener('submit', (e) => {
+adminLoginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  
-  const username = adminUsername.value.trim();
-  const password = adminPassword.value;
-  
-  if (username === 'admin' && password === 'zombrox') {
-    localStorage.setItem('wos-user', 'admin');
-    localStorage.setItem('wos-admin-token', 'authenticated');
+  try {
+    await Auth.login(adminUsername.value.trim(), adminPassword.value);
     adminLoginModal.close();
     adminUsername.value = '';
     adminPassword.value = '';
-    checkAdminStatus();
+    await checkAdminStatus();
     alert('Admin login successful!');
-  } else {
-    alert('Invalid username or password');
+  } catch (err) {
+    alert(err.message);
   }
 });
 

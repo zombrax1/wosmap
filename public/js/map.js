@@ -9,21 +9,10 @@ let cities = [];
 let isAdmin = false;
 let currentUser = 'viewer';
 
-// Check if user is admin (you can modify this logic)
-function checkAdminStatus() {
-  const storedUser = localStorage.getItem('wos-user');
-  const storedAdminToken = localStorage.getItem('wos-admin-token');
-  
-  if (storedUser === 'admin' && storedAdminToken === 'authenticated') {
-    isAdmin = true;
-    currentUser = 'admin';
-  } else {
-    isAdmin = false;
-    currentUser = 'viewer';
-    localStorage.setItem('wos-user', 'viewer');
-    localStorage.removeItem('wos-admin-token');
-  }
-  
+async function checkAdminStatus() {
+  const user = await Auth.fetchUser();
+  isAdmin = Auth.isManager();
+  currentUser = user ? user.username : 'viewer';
   updateUIForUser();
   updateMenuUI();
 }
@@ -457,33 +446,28 @@ adminLoginBtn.addEventListener('click', () => {
   adminLoginModal.showModal();
 });
 
-logoutBtn.addEventListener('click', () => {
+logoutBtn.addEventListener('click', async () => {
   menuDropdown.classList.add('hidden');
-  localStorage.removeItem('wos-user');
-  localStorage.removeItem('wos-admin-token');
-  checkAdminStatus();
+  await Auth.logout();
+  await checkAdminStatus();
   alert('Logged out successfully');
 });
 
 closeAdminLogin.addEventListener('click', () => adminLoginModal.close());
 cancelAdminLogin.addEventListener('click', () => adminLoginModal.close());
 
-adminLoginForm.addEventListener('submit', (e) => {
+adminLoginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  
-  const username = adminUsername.value.trim();
-  const password = adminPassword.value;
-  
-  if (username === 'admin' && password === 'zombrox') {
-    localStorage.setItem('wos-user', 'admin');
-    localStorage.setItem('wos-admin-token', 'authenticated');
+
+  try {
+    await Auth.login(adminUsername.value.trim(), adminPassword.value);
     adminLoginModal.close();
     adminUsername.value = '';
     adminPassword.value = '';
-    checkAdminStatus();
+    await checkAdminStatus();
     alert('Admin login successful!');
-  } else {
-    alert('Invalid username or password');
+  } catch (err) {
+    alert(err.message);
   }
 });
 
