@@ -105,3 +105,79 @@
   border-color: #10b981 !important;
   box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2) !important;
 }
+
+/* Light theme overrides */
+body.light {
+  background-color: #ffffff;
+  color: #1e293b;
+}
+
+body.light .bg-slate-950,
+body.light .bg-slate-900 {
+  background-color: #ffffff !important;
+}
+
+body.light .bg-slate-900\/95 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+body.light .bg-slate-900\/70 {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+body.light .bg-slate-800 {
+  background-color: #f1f5f9 !important;
+}
+
+body.light .bg-slate-800\/95 {
+  background-color: rgba(241, 245, 249, 0.95) !important;
+}
+
+body.light .bg-slate-700 {
+  background-color: #e2e8f0 !important;
+}
+
+body.light .border-slate-800 {
+  border-color: #cbd5e1 !important;
+}
+
+body.light .border-slate-700 {
+  border-color: #d1d5db !important;
+}
+
+body.light .border-slate-600 {
+  border-color: #e2e8f0 !important;
+}
+
+body.light .text-slate-100,
+body.light .text-slate-200 {
+  color: #1e293b !important;
+}
+
+body.light .text-slate-300 {
+  color: #334155 !important;
+}
+
+body.light .text-slate-400 {
+  color: #475569 !important;
+}
+
+body.light .text-indigo-200 {
+  color: #4338ca !important;
+}
+
+body.light .text-indigo-300 {
+  color: #4f46e5 !important;
+}
+
+body.light .text-red-300 {
+  color: #b91c1c !important;
+}
+
+body.light .hover\:bg-slate-800:hover {
+  background-color: #e2e8f0 !important;
+}
+
+body.light .hover\:bg-slate-700:hover {
+  background-color: #cbd5e1 !important;
+}
