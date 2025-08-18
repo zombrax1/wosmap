@@ -57,11 +57,6 @@
       <div class="flex items-center gap-1">
         <span class="inline-block w-3 h-3 rounded bg-sky-400"></span>
         Bear Trap (2×2)
-        <select id="bearTrapSelect" class="ml-1 bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs">
-          <option value="">Cities</option>
-          <option value="0">Trap 1</option>
-          <option value="1">Trap 2</option>
-        </select>
         <span class="ml-1 text-slate-400">(click map to set or remove)</span>
       </div>
       <div class="ml-auto flex items-center gap-2">
@@ -86,7 +81,7 @@
 
     <!-- Bottom help -->
     <footer class="px-4 py-3 text-xs text-slate-400 border-t border-slate-800">
-      Tap an empty tile to create a city. Tap an existing city to edit or delete. Long‑press (700ms) on a city to quick‑toggle Reserved/Occupied. Select a bear trap above, then click the map to place or remove it using the popup. Data is saved in the database.
+      Tap an empty tile to add a city or place a bear trap via popup. Tap an existing city to edit or delete. Long‑press (700ms) on a city to quick‑toggle Reserved/Occupied. Data is saved in the database.
     </footer>
   </div>
 
@@ -143,16 +138,22 @@
     </form>
   </dialog>
 
-  <!-- Bear Trap Modal -->
-  <dialog id="trapModal" class="rounded-2xl bg-slate-900/95 border border-slate-700 p-0 text-slate-100 w-[220px]">
+  <!-- Placement Modal -->
+  <dialog id="trapModal" class="rounded-2xl bg-slate-900/95 border border-slate-700 p-0 text-slate-100 w-[240px]">
     <form method="dialog">
       <div class="p-4 border-b border-slate-700 flex items-center justify-between">
-        <h3 class="text-lg font-semibold">Bear Trap</h3>
+        <h3 class="text-lg font-semibold">Choose Action</h3>
         <button type="button" id="closeTrapModal" class="p-2 rounded-lg hover:bg-slate-800">✕</button>
       </div>
-      <div class="p-4 flex justify-end gap-2">
-        <button type="button" id="deleteTrapBtn" class="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-sm">Delete</button>
-        <button type="button" id="selectTrapBtn" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm">Select</button>
+      <div id="trapPlaceSection" class="p-4 flex flex-col gap-3">
+        <button type="button" id="addCityOption" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm">Insert City</button>
+        <div class="flex gap-2">
+          <button type="button" class="trapOption px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-sm" data-index="0">Trap 1</button>
+          <button type="button" class="trapOption px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-sm" data-index="1">Trap 2</button>
+        </div>
+      </div>
+      <div id="trapDeleteSection" class="p-4 flex justify-end gap-2 hidden">
+        <button type="button" id="deleteTrapBtn" class="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-sm">Delete Trap</button>
       </div>
     </form>
   </dialog>

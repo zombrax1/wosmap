@@ -166,9 +166,9 @@ whiteout-spot-organizer/
 - Long-press (700ms) on any city to toggle between occupied/reserved
 
 ### Bear Traps (Admin Only)
-1. Select a trap slot from the Bear Trap dropdown on the map.
-2. Click the map to open a popup for the 2×2 trap area.
-3. Choose **Select** to place the trap or **Delete** to clear it.
+1. Click an empty tile on the map to open the action popup.
+2. Choose **Trap 1** or **Trap 2** to place a 2×2 trap, or select **Insert City** to add a city instead.
+3. To remove a trap, click any tile within its area and use **Delete Trap** in the popup.
 
 ### Searching and Filtering
 - Use the search box to find cities by name

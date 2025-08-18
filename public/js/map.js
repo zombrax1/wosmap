@@ -3,11 +3,11 @@ const GRID_CELLS = 41; // odd number so we have a single center cell
 const CENTER = Math.floor(GRID_CELLS / 2);
 const BEAR_TRAP_SIZE = 2;
 const BEAR_TRAP_COUNT = 2;
-let bearTraps = JSON.parse(localStorage.getItem('bearTraps') || '[]');
+const BEAR_TRAP_STORAGE_KEY = 'bearTraps';
+let bearTraps = JSON.parse(localStorage.getItem(BEAR_TRAP_STORAGE_KEY) || '[]');
 if (bearTraps.length < BEAR_TRAP_COUNT) {
   bearTraps = Array.from({ length: BEAR_TRAP_COUNT }, (_, i) => bearTraps[i] || null);
 }
-let selectedBearTrap = null;
 
 /** @type {Array<{id:string,name:string,level?:number,status:'occupied'|'reserved',x:number,y:number,notes?:string,color:string}>} */
 let cities = [];
@@ -36,14 +36,12 @@ function updateUIForUser() {
     addCityBtn.style.display = 'block';
     autoInsertBtn.style.display = 'block';
     clearAllBtn.style.display = 'block';
-    bearTrapSelect.disabled = false;
   } else {
     userModeEl.textContent = 'View Only';
     userModeEl.className = 'text-xs px-2 py-1 rounded bg-slate-700 text-slate-200';
     addCityBtn.style.display = 'none';
     autoInsertBtn.style.display = 'none';
     clearAllBtn.style.display = 'none';
-    bearTrapSelect.disabled = true;
   }
 }
 
@@ -92,12 +90,14 @@ const searchInput = document.getElementById('search');
 document.getElementById('clearSearch').addEventListener('click', ()=>{ searchInput.value=''; render(); });
 
 const zoom = document.getElementById('zoom');
-const bearTrapSelect = document.getElementById('bearTrapSelect');
 const trapModal = document.getElementById('trapModal');
 const closeTrapModal = document.getElementById('closeTrapModal');
-const selectTrapBtn = document.getElementById('selectTrapBtn');
+const trapPlaceSection = document.getElementById('trapPlaceSection');
+const trapDeleteSection = document.getElementById('trapDeleteSection');
+const addCityOption = document.getElementById('addCityOption');
+const trapOptionButtons = document.querySelectorAll('.trapOption');
 const deleteTrapBtn = document.getElementById('deleteTrapBtn');
-let pendingTrap = null;
+let pendingPlacement = null;
 
 // Form fields
 const idEl = document.getElementById('cityId');
@@ -122,10 +122,10 @@ async function loadCities() {
   }
 }
 
-async function saveCity(cityData) {
+async function saveCity(cityData, isNew) {
   try {
-    const method = cityData.id ? 'PUT' : 'POST';
-    const url = cityData.id ? `/api/cities/${cityData.id}` : '/api/cities';
+    const method = isNew ? 'POST' : 'PUT';
+    const url = isNew ? '/api/cities' : `/api/cities/${cityData.id}`;
     
     const response = await fetch(url, {
       method,
@@ -163,9 +163,9 @@ async function deleteCity(id) {
 async function toggleStatus(id) {
   const city = cities.find(x => x.id === id);
   if (!city) return;
-  
+
   const newStatus = city.status === 'reserved' ? 'occupied' : 'reserved';
-  const success = await saveCity({ ...city, status: newStatus });
+  const success = await saveCity({ ...city, status: newStatus }, false);
   if (success) {
     render();
   }
@@ -193,11 +193,22 @@ function highlightBearTraps() {
   }
 }
 
-function clearSelectedTrap() {
-  if (selectedBearTrap === null) return;
-  bearTraps[selectedBearTrap] = null;
-  localStorage.setItem('bearTraps', JSON.stringify(bearTraps));
+function setBearTrap(index, topLeft) {
+  bearTraps[index] = topLeft;
+  localStorage.setItem(BEAR_TRAP_STORAGE_KEY, JSON.stringify(bearTraps));
   highlightBearTraps();
+}
+
+function removeBearTrap(index) {
+  bearTraps[index] = null;
+  localStorage.setItem(BEAR_TRAP_STORAGE_KEY, JSON.stringify(bearTraps));
+  highlightBearTraps();
+}
+
+function trapIndexAt(x, y) {
+  return bearTraps.findIndex(trap =>
+    getBearTrapCells(trap).some(c => c.x === x && c.y === y)
+  );
 }
 
 function buildGrid() {
@@ -220,14 +231,8 @@ function buildGrid() {
       cell.dataset.x = x;
       cell.dataset.y = y;
 
-      // Click to place/remove bear traps or manage cities
-      cell.addEventListener('click', (e) => {
-        if (isAdmin && selectedBearTrap !== null) {
-          pendingTrap = { x, y };
-          trapModal.showModal();
-          return;
-        }
-
+      // Click to manage cities or bear traps
+      cell.addEventListener('click', () => {
         const existing = cities.find(c => c.x === x && c.y === y);
         if (existing) {
           if (isAdmin) {
@@ -235,9 +240,24 @@ function buildGrid() {
           } else {
             showCityInfo(existing);
           }
-        } else if (isAdmin) {
-          openCreateAt(x, y);
+          return;
         }
+
+        if (!isAdmin) return;
+
+        const trapIdx = trapIndexAt(x, y);
+        if (trapIdx !== -1) {
+          pendingPlacement = { index: trapIdx };
+          trapPlaceSection.classList.add('hidden');
+          trapDeleteSection.classList.remove('hidden');
+          trapModal.showModal();
+          return;
+        }
+
+        pendingPlacement = { x, y };
+        trapPlaceSection.classList.remove('hidden');
+        trapDeleteSection.classList.add('hidden');
+        trapModal.showModal();
       });
 
       grid.appendChild(cell);
@@ -337,6 +357,7 @@ document.getElementById('closeModal').addEventListener('click', () => cityModal.
 
 cityForm.addEventListener('submit', async (e) => {
   e.preventDefault(); // dialog default is to close; we manage explicitly
+  const isNew = !idEl.value;
   const id = idEl.value || crypto.randomUUID();
   const payload = {
     id,
@@ -349,7 +370,7 @@ cityForm.addEventListener('submit', async (e) => {
     color: colorEl.value
   };
 
-  const success = await saveCity(payload);
+  const success = await saveCity(payload, isNew);
   if (success) {
     cityModal.close();
   }
@@ -412,7 +433,7 @@ autoInsertBtn.addEventListener('click', async () => {
     color: '#ec4899'
   };
   
-  const success = await saveCity(cityData);
+  const success = await saveCity(cityData, true);
   if (success) {
     alert(`City "${name}" auto-inserted at (${x}, ${y})`);
   }
@@ -458,29 +479,33 @@ zoom.addEventListener('input', () => {
   gridWrapper.style.transform = `scale(${scale})`;
 });
 
-bearTrapSelect.addEventListener('change', (e) => {
-  const value = e.target.value;
-  selectedBearTrap = value === '' ? null : Number(value);
-});
-
 closeTrapModal.addEventListener('click', () => {
-  pendingTrap = null;
+  pendingPlacement = null;
   trapModal.close();
 });
 
-selectTrapBtn.addEventListener('click', () => {
-  if (!isAdmin || selectedBearTrap === null || !pendingTrap) return;
-  bearTraps[selectedBearTrap] = pendingTrap;
-  localStorage.setItem('bearTraps', JSON.stringify(bearTraps));
-  highlightBearTraps();
-  pendingTrap = null;
+addCityOption.addEventListener('click', () => {
+  if (!pendingPlacement) return;
+  const { x, y } = pendingPlacement;
+  pendingPlacement = null;
   trapModal.close();
+  openCreateAt(x, y);
+});
+
+trapOptionButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!pendingPlacement) return;
+    const idx = Number(btn.dataset.index);
+    setBearTrap(idx, pendingPlacement);
+    pendingPlacement = null;
+    trapModal.close();
+  });
 });
 
 deleteTrapBtn.addEventListener('click', () => {
-  if (!isAdmin || selectedBearTrap === null) return;
-  clearSelectedTrap();
-  pendingTrap = null;
+  if (!pendingPlacement) return;
+  removeBearTrap(pendingPlacement.index);
+  pendingPlacement = null;
   trapModal.close();
 });
 
