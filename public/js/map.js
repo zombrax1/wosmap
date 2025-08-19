@@ -4,6 +4,8 @@ const CENTER = Math.floor(GRID_CELLS / 2);
 const BEAR_TRAP_SIZE = 2;
 const BEAR_TRAP_COUNT = 2;
 const BEAR_TRAP_STORAGE_KEY = 'bearTraps';
+const CITY_DRAG_TYPE = 'application/x-city-id';
+const LONG_PRESS_MS = 700;
 let bearTraps = JSON.parse(localStorage.getItem(BEAR_TRAP_STORAGE_KEY) || '[]');
 if (bearTraps.length < BEAR_TRAP_COUNT) {
   bearTraps = Array.from({ length: BEAR_TRAP_COUNT }, (_, i) => bearTraps[i] || null);
@@ -102,7 +104,8 @@ let pendingPlacement = null;
 // Info popup elements
 const infoPopup = document.getElementById('infoPopup');
 const infoContent = document.getElementById('infoContent');
-const infoAddBtn = document.getElementById('infoAddBtn');
+const infoAddCityBtn = document.getElementById('infoAddCityBtn');
+const infoAddBearBtn = document.getElementById('infoAddBearBtn');
 const infoEditBtn = document.getElementById('infoEditBtn');
 const infoDeleteBtn = document.getElementById('infoDeleteBtn');
 const infoCloseBtn = document.getElementById('infoCloseBtn');
@@ -219,6 +222,27 @@ function trapIndexAt(x, y) {
   );
 }
 
+function startBearTrapPlacement(x, y) {
+  pendingPlacement = { x, y };
+  trapPlaceSection.classList.remove('hidden');
+  trapDeleteSection.classList.add('hidden');
+  trapModal.showModal();
+}
+
+function handleCellDrop(e, x, y) {
+  e.preventDefault();
+  if (!isAdmin) return;
+  const cityId = e.dataTransfer.getData(CITY_DRAG_TYPE);
+  if (!cityId) return;
+  if (cities.some(c => c.x === x && c.y === y)) {
+    alert('Cell already occupied');
+    return;
+  }
+  const city = cities.find(c => c.id === cityId);
+  if (!city) return;
+  saveCity({ ...city, x, y }, false);
+}
+
 function buildGrid() {
   grid.style.setProperty('--cells', GRID_CELLS);
   grid.innerHTML = '';
@@ -241,9 +265,21 @@ function buildGrid() {
 
       // Click to show info or actions for this cell
       cell.addEventListener('click', () => {
+        const trapIdx = trapIndexAt(x, y);
+        if (trapIdx >= 0) {
+          pendingPlacement = { index: trapIdx };
+          trapPlaceSection.classList.add('hidden');
+          trapDeleteSection.classList.remove('hidden');
+          trapModal.showModal();
+          return;
+        }
         const existing = cities.find(c => c.x === x && c.y === y);
         showInfoPopup(existing, x, y);
       });
+
+      // Support dropping a dragged city
+      cell.addEventListener('dragover', (e) => e.preventDefault());
+      cell.addEventListener('drop', (e) => handleCellDrop(e, x, y));
 
       grid.appendChild(cell);
     }
@@ -276,6 +312,7 @@ function render() {
     btn.style.color = c.status === 'reserved' ? '#1e293b' : 'white';
     btn.textContent = c.name?.slice(0, 8) || 'City';
     btn.title = `${c.name || 'City'} (Lv ${c.level || '?'})\n${c.status} @ (${c.x}, ${c.y})${c.notes ? `\n${c.notes}` : ''}`;
+    btn.draggable = isAdmin;
 
     // Click to show info popup with optional actions
     btn.addEventListener('click', (e) => {
@@ -286,11 +323,15 @@ function render() {
     // long press -> toggle reserved/occupied (admin only)
     let pressTimer;
     if (isAdmin) {
+      btn.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData(CITY_DRAG_TYPE, c.id);
+        e.dataTransfer.effectAllowed = 'move';
+      });
       btn.addEventListener('touchstart', (e) => {
-        pressTimer = setTimeout(() => { toggleStatus(c.id); }, 700);
+        pressTimer = setTimeout(() => { toggleStatus(c.id); }, LONG_PRESS_MS);
       });
       btn.addEventListener('touchend', () => clearTimeout(pressTimer));
-      btn.addEventListener('mousedown', () => { pressTimer = setTimeout(() => toggleStatus(c.id), 700); });
+      btn.addEventListener('mousedown', () => { pressTimer = setTimeout(() => toggleStatus(c.id), LONG_PRESS_MS); });
       btn.addEventListener('mouseup', () => clearTimeout(pressTimer));
       btn.addEventListener('mouseleave', () => clearTimeout(pressTimer));
     }
@@ -423,7 +464,8 @@ autoInsertBtn.addEventListener('click', async () => {
 // Show info popup for a cell or city
 function showInfoPopup(city, x, y) {
   infoContent.innerHTML = '';
-  infoAddBtn.classList.add('hidden');
+  infoAddCityBtn.classList.add('hidden');
+  infoAddBearBtn.classList.add('hidden');
   infoEditBtn.classList.add('hidden');
   infoDeleteBtn.classList.add('hidden');
 
@@ -454,10 +496,17 @@ function showInfoPopup(city, x, y) {
     infoContent.textContent = `No city at (${x}, ${y})`;
 
     if (isAdmin) {
-      infoAddBtn.classList.remove('hidden');
-      infoAddBtn.onclick = () => {
+      infoAddCityBtn.classList.remove('hidden');
+      infoAddBearBtn.classList.remove('hidden');
+
+      infoAddCityBtn.onclick = () => {
         infoPopup.close();
         openCreateAt(x, y);
+      };
+
+      infoAddBearBtn.onclick = () => {
+        infoPopup.close();
+        startBearTrapPlacement(x, y);
       };
     }
   }
