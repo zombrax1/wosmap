@@ -324,6 +324,10 @@ app.get('/users', requireRole(...USER_MANAGEMENT_ROLES), (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'users.html'));
 });
 
+app.get('/help', (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'help.html'));
+});
+
 app.get('/', (req, res) => {
   res.redirect('/map');
 });
@@ -335,6 +339,7 @@ if (require.main === module) {
     console.log(`List page: http://localhost:${PORT}/list`);
     console.log(`History page: http://localhost:${PORT}/history`);
     console.log(`Users page: http://localhost:${PORT}/users`);
+    console.log(`Help page: http://localhost:${PORT}/help`);
   });
 }
 

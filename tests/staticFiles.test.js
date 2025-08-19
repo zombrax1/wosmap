@@ -7,4 +7,10 @@ describe('static file serving', () => {
     expect(res.status).toBe(200);
     expect(res.text).toContain('const Auth');
   });
+
+  test('serves help page', async () => {
+    const res = await request(app).get('/help');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('How to Use');
+  });
 });
