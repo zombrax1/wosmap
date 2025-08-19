@@ -4,96 +4,43 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Whiteout Spot Organizer - Help</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/tailwind.css">
 </head>
-<body class="h-full bg-slate-900 text-slate-100">
-  <div class="h-full flex flex-col">
-    <!-- Top Bar -->
-    <header class="sticky top-0 z-50 backdrop-blur bg-slate-900/70 border-b border-slate-800">
-      <div class="px-3 sm:px-4 py-3 flex items-center gap-3">
-        <div class="flex items-center gap-2">
-          <span class="text-xl font-bold tracking-tight">ZOM WOS Spot Organizer</span>
-          <span class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-indigo-600/30 text-indigo-200 border border-indigo-400/30">Beta</span>
-        </div>
-        <div class="ml-auto flex items-center gap-3">
-          <a href="/map" class="text-indigo-300 hover:text-indigo-200 underline underline-offset-4">Map View</a>
-          <button id="themeToggle" class="p-2 rounded-lg hover:bg-slate-800" title="Toggle theme">🌗</button>
-          <!-- Hamburger Menu -->
-          <button id="menuBtn" class="p-2 rounded-lg hover:bg-slate-800">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="flex-1 overflow-y-auto p-4 space-y-6">
-      <section>
-        <h2 class="text-lg font-semibold">How to Use</h2>
-        <p class="mt-2 text-sm">Browse the map to view existing city spots. Use the zoom slider and drag to navigate the grid.</p>
-      </section>
-      <section>
-        <h2 class="text-lg font-semibold">How to Insert a City</h2>
-        <ol class="mt-2 list-decimal list-inside text-sm space-y-1">
-          <li>Open the <strong>Map</strong> page and select <strong>Insert City</strong>.</li>
-          <li>Fill in the city details including name, level, status, coordinates and optional notes.</li>
-          <li>Click <strong>Save</strong> to add the city to the map.</li>
-        </ol>
-      </section>
-      <section>
-        <h2 class="text-lg font-semibold">Who Can Insert Cities</h2>
-        <p class="mt-2 text-sm">Only authenticated users with the appropriate role can insert or modify cities. Guests may view the map in read‑only mode.</p>
-      </section>
-      <section>
-        <h2 class="text-lg font-semibold">Need Help?</h2>
-        <p class="mt-2 text-sm">If you encounter any issues, please contact the repository administrator by opening an issue on the project\'s GitHub page.</p>
-      </section>
-    </main>
-
-    <!-- Menu Dropdown -->
-    <div id="menuDropdown" class="hidden absolute top-16 right-4 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-48">
-      <div class="p-2">
-        <a href="/map" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">🗺️ Map View</a>
-        <a href="/list" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">📋 List View</a>
-        <a href="/history" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">📜 Edit History</a>
-        <a href="/users" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">👥 Users & Audit</a>
-        <a href="/help" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded bg-slate-700">❓ Help & Info</a>
-        <hr class="border-slate-600 my-1">
-        <button id="adminLoginBtn" class="block w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">🔐 Admin Login</button>
-        <button id="logoutBtn" class="hidden block w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-slate-700 rounded">🚪 Logout</button>
-      </div>
-    </div>
-
-    <!-- Admin Login Modal -->
-    <dialog id="adminLoginModal" class="rounded-2xl bg-slate-900/95 border border-slate-700 p-0 text-slate-100 w-[96%] sm:w-[420px]">
-      <form id="adminLoginForm" method="dialog">
-        <div class="p-4 border-b border-slate-700 flex items-center justify-between">
-          <h3 class="text-lg font-semibold">Admin Login</h3>
-          <button type="button" id="closeAdminLogin" class="p-2 rounded-lg hover:bg-slate-800">✕</button>
-        </div>
-        <div class="p-4 space-y-4">
-          <div>
-            <label class="text-xs text-slate-300">Username</label>
-            <input id="adminUsername" type="text" required class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="admin" />
-          </div>
-          <div>
-            <label class="text-xs text-slate-300">Password</label>
-            <input id="adminPassword" type="password" required class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="Enter password" />
-          </div>
-        </div>
-        <div class="p-4 border-t border-slate-700 flex justify-end gap-2">
-          <button type="button" id="cancelAdminLogin" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm">Cancel</button>
-          <button type="submit" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm">Login</button>
-        </div>
-      </form>
-    </dialog>
-  </div>
-
-  <script src="js/theme.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/help.js"></script>
+<body class="bg-slate-900 text-slate-100">
+  <nav class="p-4 bg-slate-800">
+    <ul class="flex gap-4 text-sm">
+      <li><a href="/map" class="text-indigo-300 hover:text-indigo-200">Map</a></li>
+      <li><a href="/list" class="text-indigo-300 hover:text-indigo-200">List</a></li>
+      <li><a href="/history" class="text-indigo-300 hover:text-indigo-200">History</a></li>
+      <li><a href="/users" class="text-indigo-300 hover:text-indigo-200">Users</a></li>
+      <li><a href="/help" class="text-indigo-200 underline">Help</a></li>
+    </ul>
+  </nav>
+  <main class="p-6 space-y-6">
+    <section>
+      <h1 class="text-xl font-semibold mb-2">Help & Info</h1>
+      <p class="text-sm">This page explains how to navigate the map and manage city spots.</p>
+    </section>
+    <section>
+      <h2 class="text-lg font-semibold">How to Use</h2>
+      <p class="mt-2 text-sm">Browse the map to view existing city spots. Use zoom and drag to explore.</p>
+    </section>
+    <section>
+      <h2 class="text-lg font-semibold">How to Insert a City</h2>
+      <ol class="mt-2 text-sm list-decimal list-inside space-y-1">
+        <li>Open the <a href="/map" class="underline text-indigo-300 hover:text-indigo-200">Map</a> page and select <em>Insert City</em>.</li>
+        <li>Fill in the city details including name, level, status, coordinates and optional notes.</li>
+        <li>Click <strong>Save</strong> to add the city to the map.</li>
+      </ol>
+    </section>
+    <section>
+      <h2 class="text-lg font-semibold">Who Can Insert Cities</h2>
+      <p class="mt-2 text-sm">Only authenticated users with the appropriate role can insert or modify cities. Guests may view the map in read‑only mode.</p>
+    </section>
+    <section>
+      <h2 class="text-lg font-semibold">Need Help?</h2>
+      <p class="mt-2 text-sm">If you encounter any issues, please contact the repository administrator by opening an issue on the project's GitHub page.</p>
+    </section>
+  </main>
 </body>
 </html>
