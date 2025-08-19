@@ -99,6 +99,14 @@ const trapOptionButtons = document.querySelectorAll('.trapOption');
 const deleteTrapBtn = document.getElementById('deleteTrapBtn');
 let pendingPlacement = null;
 
+// Info popup elements
+const infoPopup = document.getElementById('infoPopup');
+const infoContent = document.getElementById('infoContent');
+const infoAddBtn = document.getElementById('infoAddBtn');
+const infoEditBtn = document.getElementById('infoEditBtn');
+const infoDeleteBtn = document.getElementById('infoDeleteBtn');
+const infoCloseBtn = document.getElementById('infoCloseBtn');
+
 // Form fields
 const idEl = document.getElementById('cityId');
 const nameEl = document.getElementById('name');
@@ -231,33 +239,10 @@ function buildGrid() {
       cell.dataset.x = x;
       cell.dataset.y = y;
 
-      // Click to manage cities or bear traps
+      // Click to show info or actions for this cell
       cell.addEventListener('click', () => {
         const existing = cities.find(c => c.x === x && c.y === y);
-        if (existing) {
-          if (isAdmin) {
-            openEdit(existing);
-          } else {
-            showCityInfo(existing);
-          }
-          return;
-        }
-
-        if (!isAdmin) return;
-
-        const trapIdx = trapIndexAt(x, y);
-        if (trapIdx !== -1) {
-          pendingPlacement = { index: trapIdx };
-          trapPlaceSection.classList.add('hidden');
-          trapDeleteSection.classList.remove('hidden');
-          trapModal.showModal();
-          return;
-        }
-
-        pendingPlacement = { x, y };
-        trapPlaceSection.classList.remove('hidden');
-        trapDeleteSection.classList.add('hidden');
-        trapModal.showModal();
+        showInfoPopup(existing, x, y);
       });
 
       grid.appendChild(cell);
@@ -292,14 +277,10 @@ function render() {
     btn.textContent = c.name?.slice(0, 8) || 'City';
     btn.title = `${c.name || 'City'} (Lv ${c.level || '?'})\n${c.status} @ (${c.x}, ${c.y})${c.notes ? `\n${c.notes}` : ''}`;
 
-    // click -> edit (admin only) or view (viewer)
+    // Click to show info popup with optional actions
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (isAdmin) {
-        openEdit(c);
-      } else {
-        showCityInfo(c);
-      }
+      showInfoPopup(c, c.x, c.y);
     });
 
     // long press -> toggle reserved/occupied (admin only)
@@ -439,18 +420,52 @@ autoInsertBtn.addEventListener('click', async () => {
   }
 });
 
-// Show city info (viewer mode)
-function showCityInfo(city) {
-  const info = `
-City: ${city.name}
-Level: ${city.level || 'Unknown'}
-Status: ${city.status}
-Position: (${city.x}, ${city.y})
-${city.notes ? `Notes: ${city.notes}` : ''}
-  `.trim();
-  
-  alert(info);
+// Show info popup for a cell or city
+function showInfoPopup(city, x, y) {
+  infoContent.innerHTML = '';
+  infoAddBtn.classList.add('hidden');
+  infoEditBtn.classList.add('hidden');
+  infoDeleteBtn.classList.add('hidden');
+
+  if (city) {
+    infoContent.innerHTML = `
+      <div><strong>${city.name}</strong></div>
+      <div>Level: ${city.level || 'Unknown'}</div>
+      <div>Status: ${city.status}</div>
+      <div>Position: (${city.x}, ${city.y})</div>
+      ${city.notes ? `<div>Notes: ${city.notes}</div>` : ''}
+    `;
+
+    if (isAdmin) {
+      infoEditBtn.classList.remove('hidden');
+      infoDeleteBtn.classList.remove('hidden');
+
+      infoEditBtn.onclick = () => {
+        infoPopup.close();
+        openEdit(city);
+      };
+
+      infoDeleteBtn.onclick = async () => {
+        infoPopup.close();
+        await deleteCity(city.id);
+      };
+    }
+  } else {
+    infoContent.textContent = `No city at (${x}, ${y})`;
+
+    if (isAdmin) {
+      infoAddBtn.classList.remove('hidden');
+      infoAddBtn.onclick = () => {
+        infoPopup.close();
+        openCreateAt(x, y);
+      };
+    }
+  }
+
+  infoPopup.showModal();
 }
+
+infoCloseBtn.addEventListener('click', () => infoPopup.close());
 
 clearAllBtn.addEventListener('click', async () => {
   if (!isAdmin) return;
