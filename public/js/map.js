@@ -89,9 +89,10 @@ const closeAdminLogin = document.getElementById('closeAdminLogin');
 const cancelAdminLogin = document.getElementById('cancelAdminLogin');
 
 const searchInput = document.getElementById('search');
-document.getElementById('clearSearch').addEventListener('click', ()=>{ searchInput.value=''; render(); });
 
 const zoom = document.getElementById('zoom');
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+const exitFullscreenBtn = document.getElementById('exitFullscreenBtn');
 const trapModal = document.getElementById('trapModal');
 const closeTrapModal = document.getElementById('closeTrapModal');
 const trapPlaceSection = document.getElementById('trapPlaceSection');
@@ -535,6 +536,25 @@ clearAllBtn.addEventListener('click', async () => {
       alert('Clear failed: ' + error.message);
     }
   }
+});
+
+// Fullscreen support
+fullscreenBtn.addEventListener('click', () => {
+  const elem = document.getElementById('mapScroller');
+  if (elem.requestFullscreen) {
+    elem.requestFullscreen();
+  }
+});
+
+exitFullscreenBtn.addEventListener('click', () => {
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  }
+});
+
+document.addEventListener('fullscreenchange', () => {
+  const isFull = !!document.fullscreenElement;
+  exitFullscreenBtn.classList.toggle('hidden', !isFull);
 });
 
 // Zoom support
