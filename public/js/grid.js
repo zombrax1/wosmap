@@ -5,14 +5,8 @@ const CENTER_Y = Math.floor(ROWS / 2);
 
 function pointToCell(point, el, cols = COLS, rows = ROWS) {
   const rect = el.getBoundingClientRect();
-  const scaleX = rect.width / el.offsetWidth;
-  const scaleY = rect.height / el.offsetHeight;
-  const localX = (point.x - rect.left) / scaleX;
-  const localY = (point.y - rect.top) / scaleY;
-  const cellWidth = el.offsetWidth / cols;
-  const cellHeight = el.offsetHeight / rows;
-  const col = Math.floor(localX / cellWidth);
-  const row = Math.floor(localY / cellHeight);
+  const col = Math.floor(((point.x - rect.left) / rect.width) * cols);
+  const row = Math.floor(((point.y - rect.top) / rect.height) * rows);
   return {
     x: col - Math.floor(cols / 2),
     y: row - Math.floor(rows / 2)
