@@ -26,6 +26,14 @@ function createTestDB() {
       notes TEXT,
       color TEXT DEFAULT '#ec4899'
     );
+    CREATE TABLE IF NOT EXISTS traps (
+      id TEXT PRIMARY KEY,
+      slot INTEGER UNIQUE CHECK(slot IN (1,2)),
+      x INTEGER NOT NULL,
+      y INTEGER NOT NULL,
+      color TEXT NOT NULL DEFAULT '#f59e0b',
+      notes TEXT
+    );
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL,

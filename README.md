@@ -32,6 +32,7 @@ A multi-page web application for organizing spots on a grid map, built with Node
 - **Mobile Optimization**: Smaller grid and touch-friendly interface on mobile
 - **Zoom Control**: Adjustable zoom level (55% - 200%)
 - **Bear Trap Highlight**: manage up to two 2×2 zones via a popup after clicking the map
+- **Trap Persistence**: Trap locations and colors stored server-side and shared across devices
 - **Hover Effects**: Interactive highlighting and tooltips
 - **Modal Dialogs**: Clean add/edit interface
 - **Real-time Updates**: Instant reflection of changes
@@ -117,8 +118,17 @@ whiteout-spot-organizer/
 - `DELETE /api/cities/:id` - Delete city
 
 ### Import/Export
-- `GET /api/export` - Export all cities as JSON
-- `POST /api/import` - Import cities from JSON (replaces all data)
+- `GET /api/export` - Export all cities and traps as JSON (versioned payload)
+- `POST /api/import` - Import cities and traps from JSON (replaces all data)
+
+### Traps CRUD
+- `GET /api/traps` - List traps (public)
+- `POST /api/traps` - Create or replace trap (admin only)
+- `PUT /api/traps/:id` - Update trap (admin only)
+- `DELETE /api/traps/:id` - Remove trap (admin only)
+
+### Snapshot
+- `GET /api/snapshot` - Combined cities & traps with ETag for syncing
 
 ### Users CRUD
 - `GET /api/users` - List users
@@ -167,8 +177,8 @@ whiteout-spot-organizer/
 
 ### Bear Traps (Admin Only)
 1. Click an empty tile on the map to open the action popup.
-2. Choose **Trap 1** or **Trap 2** to place a 2×2 trap, or select **Insert City** to add a city instead.
-3. To remove a trap, click any tile within its area and use **Delete Trap** in the popup.
+2. Choose **Trap 1** or **Trap 2** and pick a color to place a 2×2 trap, or select **Insert City** to add a city instead.
+3. Click any trapped tile to adjust its color or use **Delete Trap**.
 
 ### Searching and Filtering
 - Use the search box to find cities by name
@@ -209,6 +219,15 @@ CREATE TABLE cities (
   y INTEGER NOT NULL,
   notes TEXT,
   color TEXT DEFAULT '#ec4899'
+);
+
+CREATE TABLE traps (
+  id TEXT PRIMARY KEY,
+  slot INTEGER UNIQUE CHECK(slot IN (1,2)),
+  x INTEGER NOT NULL,
+  y INTEGER NOT NULL,
+  color TEXT NOT NULL DEFAULT '#f59e0b',
+  notes TEXT
 );
 ```
 
