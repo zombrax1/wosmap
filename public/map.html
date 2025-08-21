@@ -20,33 +20,15 @@
     <!-- Top Bar -->
     <header class="sticky top-0 z-50 backdrop-blur bg-slate-900/70 border-b border-slate-800">
       <div class="px-3 sm:px-4 py-3 flex items-center gap-3">
-        <div class="flex items-center gap-2">
-          <span class="text-xl font-bold tracking-tight">ZOM WOS Spot Organizer</span>
-          <span class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-indigo-600/30 text-indigo-200 border border-indigo-400/30">Beta</span>
-        </div>
-        <div class="ml-auto flex items-center gap-3">
-          <label class="text-xs text-slate-300">Zoom</label>
-          <input id="zoom" type="range" min="55" max="200" value="100" class="w-28 accent-indigo-400" />
-          <button id="themeToggle" class="p-2 rounded-lg hover:bg-slate-800" title="Toggle theme">🌗</button>
-          <!-- Hamburger Menu -->
-          <button id="menuBtn" class="p-2 rounded-lg hover:bg-slate-800">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-      <div class="px-3 sm:px-4 pb-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div class="col-span-2 flex items-center gap-2">
-          <input id="search" placeholder="Search member…" class="w-full text-sm px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-          <button id="clearSearch" class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-xs">Clear</button>
-        </div>
-        <div class="flex gap-2">
-          <button id="addCityBtn" class="w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 px-3 py-2 text-sm font-medium">Insert City</button>
-        </div>
-        <div class="flex gap-2">
-          <button id="autoInsertBtn" class="w-full rounded-xl bg-green-600 hover:bg-green-500 px-3 py-2 text-sm font-medium">Auto Insert</button>
-        </div>
+        <span class="text-xl font-bold tracking-tight">WOS</span>
+        <input id="search" placeholder="Search member…" class="flex-1 text-sm px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        <button id="fullscreenBtn" class="p-2 rounded-lg hover:bg-slate-800" title="Fullscreen">⛶</button>
+        <!-- Hamburger Menu -->
+        <button id="menuBtn" class="p-2 rounded-lg hover:bg-slate-800">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -72,17 +54,13 @@
     <!-- Map / Grid -->
     <main class="flex-1 min-h-0 px-2 sm:px-4 pb-4">
       <div id="mapScroller" class="relative h-full w-full overflow-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-inner">
+        <button id="exitFullscreenBtn" class="hidden absolute top-2 right-2 z-50 p-2 rounded-lg bg-slate-900/70 hover:bg-slate-800">✕</button>
         <!-- "Infinite" canvas: a large square so you can pan around. -->
         <div id="gridWrapper" class="origin-top-left will-change-transform" style="transform: scale(1)">
           <div id="grid" class="relative grid" style="--cells: 41; grid-template-columns: repeat(var(--cells), 42px); grid-auto-rows: 42px;"></div>
         </div>
       </div>
     </main>
-
-    <!-- Bottom help -->
-    <footer class="px-4 py-3 text-xs text-slate-400 border-t border-slate-800">
-      Tap an empty tile to add a city or place a bear trap via popup. Tap an existing city to edit or delete, or drag to move. Long‑press (700ms) on a city to quick‑toggle Reserved/Occupied. Data is saved in the database.
-    </footer>
   </div>
 
   <!-- Modal -->
@@ -159,16 +137,24 @@
   </dialog>
 
      <!-- Hamburger Menu Dropdown -->
-   <div id="menuDropdown" class="hidden absolute top-16 right-4 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-48">
-     <div class="p-2">
-       <a href="/list" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">📋 List View</a>
-       <a href="/history" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">📜 Edit History</a>
-       <a href="/users" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">👥 Users & Audit</a>
-       <hr class="border-slate-600 my-1">
-       <button id="adminLoginBtn" class="block w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">🔐 Admin Login</button>
-       <button id="logoutBtn" class="hidden block w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-slate-700 rounded">🚪 Logout</button>
-     </div>
-   </div>
+    <div id="menuDropdown" class="hidden absolute top-16 right-4 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-48">
+      <div class="p-2 space-y-1">
+        <button id="addCityBtn" style="display:none" class="block w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">➕ Insert City</button>
+        <button id="autoInsertBtn" style="display:none" class="block w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">⚙️ Auto Insert</button>
+        <div class="px-3 py-2">
+          <label for="zoom" class="block mb-1 text-sm text-slate-200">Zoom</label>
+          <input id="zoom" type="range" min="55" max="200" value="100" class="w-full accent-indigo-400" />
+        </div>
+        <button id="themeToggle" class="block w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">🌗 Toggle Theme</button>
+        <hr class="border-slate-600 my-1">
+        <a href="/list" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">📋 List View</a>
+        <a href="/history" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">📜 Edit History</a>
+        <a href="/users" class="block px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">👥 Users & Audit</a>
+        <hr class="border-slate-600 my-1">
+        <button id="adminLoginBtn" class="block w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded">🔐 Admin Login</button>
+        <button id="logoutBtn" class="hidden block w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-slate-700 rounded">🚪 Logout</button>
+      </div>
+    </div>
 
    <!-- Admin Login Modal -->
   <dialog id="adminLoginModal" class="rounded-2xl bg-slate-900/95 border border-slate-700 p-0 text-slate-100 w-[96%] sm:w-[420px]">
