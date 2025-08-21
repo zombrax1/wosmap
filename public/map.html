@@ -57,7 +57,7 @@
         <button id="exitFullscreenBtn" class="hidden absolute top-2 right-2 z-50 p-2 rounded-lg bg-slate-900/70 hover:bg-slate-800">✕</button>
         <!-- "Infinite" canvas: a large square so you can pan around. -->
         <div id="gridWrapper" class="origin-top-left will-change-transform" style="transform: scale(1)">
-          <div id="grid" class="relative grid" style="--cells: 41; grid-template-columns: repeat(var(--cells), 42px); grid-auto-rows: 42px;"></div>
+          <div id="grid" class="relative grid" style="--cells: 1; grid-template-columns: repeat(var(--cells), 42px); grid-auto-rows: 42px;"></div>
         </div>
       </div>
     </main>
@@ -199,6 +199,7 @@
     </div>
   </dialog>
 
+  <script src="js/grid.js"></script>
   <script src="js/theme.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/map.js"></script>

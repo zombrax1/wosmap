@@ -1,6 +1,4 @@
 // ===== Model =====
-const GRID_CELLS = 41; // odd number so we have a single center cell
-const CENTER = Math.floor(GRID_CELLS / 2);
 const BEAR_TRAP_SIZE = 2;
 const BEAR_TRAP_COUNT = 2;
 const CITY_DRAG_TYPE = 'application/x-city-id';
@@ -101,6 +99,10 @@ const trapColor = document.getElementById('trapColor');
 const trapEditColor = document.getElementById('trapEditColor');
 const saveTrapBtn = document.getElementById('saveTrapBtn');
 let pendingPlacement = null;
+
+grid.addEventListener('click', handleGridClick);
+grid.addEventListener('dragover', (e) => e.preventDefault());
+grid.addEventListener('drop', handleGridDrop);
 
 // Info popup elements
 const infoPopup = document.getElementById('infoPopup');
@@ -284,9 +286,25 @@ function startBearTrapPlacement(x, y) {
   trapModal.showModal();
 }
 
-function handleCellDrop(e, x, y) {
+function handleGridClick(e) {
+  const { x, y } = pointToCell({ x: e.clientX, y: e.clientY }, grid, COLS, ROWS);
+  const trapIdx = trapIndexAt(x, y);
+  if (trapIdx >= 0) {
+    pendingPlacement = { index: trapIdx };
+    trapEditColor.value = bearTraps[trapIdx].color || '#f59e0b';
+    trapPlaceSection.classList.add('hidden');
+    trapDeleteSection.classList.remove('hidden');
+    trapModal.showModal();
+    return;
+  }
+  const existing = cities.find(c => c.x === x && c.y === y);
+  showInfoPopup(existing, x, y);
+}
+
+function handleGridDrop(e) {
   e.preventDefault();
   if (!isAdmin) return;
+  const { x, y } = pointToCell({ x: e.clientX, y: e.clientY }, grid, COLS, ROWS);
   const cityId = e.dataTransfer.getData(CITY_DRAG_TYPE);
   if (!cityId) return;
   if (cities.some(c => c.x === x && c.y === y)) {
@@ -299,13 +317,13 @@ function handleCellDrop(e, x, y) {
 }
 
 function buildGrid() {
-  grid.style.setProperty('--cells', GRID_CELLS);
+  grid.style.setProperty('--cells', COLS);
   grid.innerHTML = '';
 
-  for (let row = 0; row < GRID_CELLS; row++) {
-    for (let col = 0; col < GRID_CELLS; col++) {
-      const x = col - CENTER; // cartesian coords with 0,0 center
-      const y = row - CENTER;
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const x = col - CENTER_X; // cartesian coords with 0,0 center
+      const y = row - CENTER_Y;
       const cell = document.createElement('div');
       cell.className = 'relative select-none border border-slate-800/40 bg-slate-900';
 
@@ -317,25 +335,6 @@ function buildGrid() {
 
       cell.dataset.x = x;
       cell.dataset.y = y;
-
-      // Click to show info or actions for this cell
-      cell.addEventListener('click', () => {
-        const trapIdx = trapIndexAt(x, y);
-        if (trapIdx >= 0) {
-          pendingPlacement = { index: trapIdx };
-          trapEditColor.value = bearTraps[trapIdx].color || '#f59e0b';
-          trapPlaceSection.classList.add('hidden');
-          trapDeleteSection.classList.remove('hidden');
-          trapModal.showModal();
-          return;
-        }
-        const existing = cities.find(c => c.x === x && c.y === y);
-        showInfoPopup(existing, x, y);
-      });
-
-      // Support dropping a dragged city
-      cell.addEventListener('dragover', (e) => e.preventDefault());
-      cell.addEventListener('drop', (e) => handleCellDrop(e, x, y));
 
       grid.appendChild(cell);
     }
@@ -357,7 +356,7 @@ function render() {
 
   const q = searchInput.value.trim().toLowerCase();
   for (const c of cities) {
-    const idx = (c.y + CENTER) * GRID_CELLS + (c.x + CENTER);
+    const idx = (c.y + CENTER_Y) * COLS + (c.x + CENTER_X);
     const cell = cells[idx];
     if (!cell) continue;
 
@@ -661,7 +660,7 @@ deleteTrapBtn.addEventListener('click', async () => {
 // Center view on the grid at start
 function centerView() {
   const cellSize = 42 * (Number(zoom.value) / 100);
-  const contentSize = GRID_CELLS * cellSize;
+  const contentSize = COLS * cellSize;
   scroller.scrollLeft = (contentSize - scroller.clientWidth) / 2;
   scroller.scrollTop = (contentSize - scroller.clientHeight) / 2;
 }
@@ -718,10 +717,10 @@ function runTests() {
   
   // Test 1: Check if grid is built correctly
   const gridCells = grid.children.length;
-  console.assert(gridCells === GRID_CELLS * GRID_CELLS, `Grid should have ${GRID_CELLS * GRID_CELLS} cells, got ${gridCells}`);
+  console.assert(gridCells === COLS * ROWS, `Grid should have ${COLS * ROWS} cells, got ${gridCells}`);
   
   // Test 2: Check if center cell is at (0,0)
-  const centerCell = grid.children[CENTER * GRID_CELLS + CENTER];
+  const centerCell = grid.children[CENTER_Y * COLS + CENTER_X];
   console.assert(centerCell.dataset.x === '0' && centerCell.dataset.y === '0', 'Center cell should be at (0,0)');
   
   // Test 3: Check if bear trap area is highlighted
