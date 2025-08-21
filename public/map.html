@@ -124,14 +124,21 @@
         <button type="button" id="closeTrapModal" class="p-2 rounded-lg hover:bg-slate-800">✕</button>
       </div>
       <div id="trapPlaceSection" class="p-4 flex flex-col gap-3">
+        <label class="text-sm" for="trapColor">Color</label>
+        <input id="trapColor" type="color" value="#f59e0b" class="h-8 w-full">
         <button type="button" id="addCityOption" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm">Insert City</button>
         <div class="flex gap-2">
           <button type="button" class="trapOption px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-sm" data-index="0">Trap 1</button>
           <button type="button" class="trapOption px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-sm" data-index="1">Trap 2</button>
         </div>
       </div>
-      <div id="trapDeleteSection" class="p-4 flex justify-end gap-2 hidden">
-        <button type="button" id="deleteTrapBtn" class="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-sm">Delete Trap</button>
+      <div id="trapDeleteSection" class="p-4 flex flex-col gap-3 hidden">
+        <label class="text-sm" for="trapEditColor">Color</label>
+        <input id="trapEditColor" type="color" class="h-8 w-full">
+        <div class="flex justify-end gap-2">
+          <button type="button" id="saveTrapBtn" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm">Save</button>
+          <button type="button" id="deleteTrapBtn" class="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-sm">Delete Trap</button>
+        </div>
       </div>
     </form>
   </dialog>

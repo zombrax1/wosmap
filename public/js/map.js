@@ -3,13 +3,10 @@ const GRID_CELLS = 41; // odd number so we have a single center cell
 const CENTER = Math.floor(GRID_CELLS / 2);
 const BEAR_TRAP_SIZE = 2;
 const BEAR_TRAP_COUNT = 2;
-const BEAR_TRAP_STORAGE_KEY = 'bearTraps';
 const CITY_DRAG_TYPE = 'application/x-city-id';
 const LONG_PRESS_MS = 700;
-let bearTraps = JSON.parse(localStorage.getItem(BEAR_TRAP_STORAGE_KEY) || '[]');
-if (bearTraps.length < BEAR_TRAP_COUNT) {
-  bearTraps = Array.from({ length: BEAR_TRAP_COUNT }, (_, i) => bearTraps[i] || null);
-}
+let bearTraps = Array(BEAR_TRAP_COUNT).fill(null);
+let snapshotEtag = null;
 
 /** @type {Array<{id:string,name:string,level?:number,status:'occupied'|'reserved',x:number,y:number,notes?:string,color:string}>} */
 let cities = [];
@@ -100,6 +97,9 @@ const trapDeleteSection = document.getElementById('trapDeleteSection');
 const addCityOption = document.getElementById('addCityOption');
 const trapOptionButtons = document.querySelectorAll('.trapOption');
 const deleteTrapBtn = document.getElementById('deleteTrapBtn');
+const trapColor = document.getElementById('trapColor');
+const trapEditColor = document.getElementById('trapEditColor');
+const saveTrapBtn = document.getElementById('saveTrapBtn');
 let pendingPlacement = null;
 
 // Info popup elements
@@ -122,15 +122,25 @@ const notesEl = document.getElementById('notes');
 const colorEl = document.getElementById('color');
 
 // ===== API Functions =====
-async function loadCities() {
+async function loadSnapshot(force = false) {
   try {
-    const response = await fetch('/api/cities');
-    if (!response.ok) throw new Error('Failed to load cities');
-    cities = await response.json();
+    const headers = {};
+    if (!force && snapshotEtag) headers['If-None-Match'] = snapshotEtag;
+    const response = await fetch('/api/snapshot', { headers });
+    if (response.status === 304) return;
+    if (!response.ok) throw new Error('Failed to load data');
+    snapshotEtag = response.headers.get('ETag');
+    const data = await response.json();
+    cities = data.cities;
+    bearTraps = Array(BEAR_TRAP_COUNT).fill(null);
+    for (const trap of data.traps) {
+      bearTraps[trap.slot - 1] = trap;
+    }
     render();
+    highlightBearTraps();
   } catch (error) {
-    console.error('Error loading cities:', error);
-    alert('Failed to load cities: ' + error.message);
+    console.error('Error loading data:', error);
+    alert('Failed to load data: ' + error.message);
   }
 }
 
@@ -150,7 +160,7 @@ async function saveCity(cityData, isNew) {
       throw new Error(error.error || 'Failed to save city');
     }
     
-    await loadCities();
+    await loadSnapshot(true);
     return true;
   } catch (error) {
     console.error('Error saving city:', error);
@@ -163,7 +173,7 @@ async function deleteCity(id) {
   try {
     const response = await fetch(`/api/cities/${id}`, { method: 'DELETE' });
     if (!response.ok) throw new Error('Failed to delete city');
-    await loadCities();
+    await loadSnapshot(true);
     return true;
   } catch (error) {
     console.error('Error deleting city:', error);
@@ -195,26 +205,69 @@ function getBearTrapCells(topLeft) {
   return cells;
 }
 
+function hexToRgba(hex, alpha) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function highlightBearTraps() {
-  grid.querySelectorAll('.bear-trap-area').forEach(c => c.classList.remove('bear-trap-area'));
+  grid.querySelectorAll('.bear-trap-area').forEach(c => {
+    c.classList.remove('bear-trap-area');
+    c.style.backgroundColor = '';
+    c.style.boxShadow = '';
+  });
   for (const trap of bearTraps) {
+    if (!trap) continue;
+    const fill = hexToRgba(trap.color || '#f59e0b', 0.2);
+    const border = hexToRgba(trap.color || '#f59e0b', 0.45);
     for (const { x, y } of getBearTrapCells(trap)) {
       const cell = grid.querySelector(`[data-x="${x}"][data-y="${y}"]`);
-      if (cell) cell.classList.add('bear-trap-area');
+      if (cell) {
+        cell.classList.add('bear-trap-area');
+        cell.style.backgroundColor = fill;
+        cell.style.boxShadow = `inset 0 0 0 2px ${border}`;
+      }
     }
   }
 }
 
-function setBearTrap(index, topLeft) {
-  bearTraps[index] = topLeft;
-  localStorage.setItem(BEAR_TRAP_STORAGE_KEY, JSON.stringify(bearTraps));
-  highlightBearTraps();
+async function setBearTrap(index, topLeft, color) {
+  const existing = bearTraps[index];
+  const payload = {
+    id: existing?.id || crypto.randomUUID(),
+    slot: index + 1,
+    x: topLeft.x,
+    y: topLeft.y,
+    color
+  };
+  const method = existing ? 'PUT' : 'POST';
+  const url = existing ? `/api/traps/${payload.id}` : '/api/traps';
+  const response = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const err = await response.json();
+    alert('Failed to save trap: ' + (err.error || 'unknown error'));
+    return;
+  }
+  await loadSnapshot(true);
 }
 
-function removeBearTrap(index) {
-  bearTraps[index] = null;
-  localStorage.setItem(BEAR_TRAP_STORAGE_KEY, JSON.stringify(bearTraps));
-  highlightBearTraps();
+async function removeBearTrap(index) {
+  const existing = bearTraps[index];
+  if (!existing) return;
+  const response = await fetch(`/api/traps/${existing.id}`, { method: 'DELETE' });
+  if (!response.ok) {
+    const err = await response.json();
+    alert('Failed to delete trap: ' + (err.error || 'unknown error'));
+    return;
+  }
+  await loadSnapshot(true);
 }
 
 function trapIndexAt(x, y) {
@@ -225,6 +278,7 @@ function trapIndexAt(x, y) {
 
 function startBearTrapPlacement(x, y) {
   pendingPlacement = { x, y };
+  trapColor.value = '#f59e0b';
   trapPlaceSection.classList.remove('hidden');
   trapDeleteSection.classList.add('hidden');
   trapModal.showModal();
@@ -269,6 +323,7 @@ function buildGrid() {
         const trapIdx = trapIndexAt(x, y);
         if (trapIdx >= 0) {
           pendingPlacement = { index: trapIdx };
+          trapEditColor.value = bearTraps[trapIdx].color || '#f59e0b';
           trapPlaceSection.classList.add('hidden');
           trapDeleteSection.classList.remove('hidden');
           trapModal.showModal();
@@ -525,12 +580,12 @@ clearAllBtn.addEventListener('click', async () => {
       const response = await fetch('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([])
+        body: JSON.stringify({ version: 2, cities: [], traps: [] })
       });
-      
+
       if (!response.ok) throw new Error('Clear failed');
-      
-      await loadCities();
+
+      await loadSnapshot(true);
       alert('All data cleared');
     } catch (error) {
       alert('Clear failed: ' + error.message);
@@ -577,18 +632,28 @@ addCityOption.addEventListener('click', () => {
 });
 
 trapOptionButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
     if (!pendingPlacement) return;
     const idx = Number(btn.dataset.index);
-    setBearTrap(idx, pendingPlacement);
+    await setBearTrap(idx, pendingPlacement, trapColor.value);
     pendingPlacement = null;
     trapModal.close();
   });
 });
 
-deleteTrapBtn.addEventListener('click', () => {
+saveTrapBtn.addEventListener('click', async () => {
   if (!pendingPlacement) return;
-  removeBearTrap(pendingPlacement.index);
+  const idx = pendingPlacement.index;
+  const existing = bearTraps[idx];
+  if (!existing) return;
+  await setBearTrap(idx, { x: existing.x, y: existing.y }, trapEditColor.value);
+  pendingPlacement = null;
+  trapModal.close();
+});
+
+deleteTrapBtn.addEventListener('click', async () => {
+  if (!pendingPlacement) return;
+  await removeBearTrap(pendingPlacement.index);
   pendingPlacement = null;
   trapModal.close();
 });
@@ -660,7 +725,7 @@ function runTests() {
   console.assert(centerCell.dataset.x === '0' && centerCell.dataset.y === '0', 'Center cell should be at (0,0)');
   
   // Test 3: Check if bear trap area is highlighted
-  bearTraps[0] = { x: 0, y: 0 };
+  bearTraps[0] = { x: 0, y: 0, color: '#f59e0b' };
   highlightBearTraps();
   const bearTrapCell = grid.querySelector('[data-x="0"][data-y="0"]');
   console.assert(bearTrapCell && bearTrapCell.classList.contains('bear-trap-area'), 'Bear trap cells should be highlighted');
@@ -671,7 +736,8 @@ function runTests() {
 // ===== Boot =====
 checkAdminStatus();
 buildGrid();
-loadCities();
+loadSnapshot();
+setInterval(() => loadSnapshot(), 5000);
 requestAnimationFrame(centerView);
 
 // Run tests if URL has #test

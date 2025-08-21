@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const {
   TABLES,
@@ -171,6 +172,62 @@ app.delete('/api/cities/:id', requireAuth, (req, res) => {
   }
 });
 
+// Trap routes
+app.get('/api/traps', (req, res) => {
+  try {
+    const traps = allQuery(`SELECT * FROM ${TABLES.TRAPS} ORDER BY slot`);
+    res.json(traps);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/traps', requireAuth, requireRole('admin'), (req, res) => {
+  try {
+    const { id, slot, x, y, color, notes } = req.body;
+    runQuery(
+      `INSERT OR REPLACE INTO ${TABLES.TRAPS} (id, slot, x, y, color, notes) VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, slot, x, y, color, notes]
+    );
+    logAudit(TABLES.TRAPS, ACTIONS.CREATE, id);
+    return res.json({ id, success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/traps/:id', requireAuth, requireRole('admin'), (req, res) => {
+  try {
+    const { id } = req.params;
+    const { slot, x, y, color, notes } = req.body;
+    const result = runQuery(
+      `UPDATE ${TABLES.TRAPS} SET slot = ?, x = ?, y = ?, color = ?, notes = ? WHERE id = ?`,
+      [slot, x, y, color, notes, id]
+    );
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Trap not found' });
+    }
+    logAudit(TABLES.TRAPS, ACTIONS.UPDATE, id);
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/traps/:id', requireAuth, requireRole('admin'), (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = runQuery(`DELETE FROM ${TABLES.TRAPS} WHERE id = ?`, [id]);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Trap not found' });
+    }
+    logAudit(TABLES.TRAPS, ACTIONS.DELETE, id);
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // User management
 app.get('/api/users', requireRole(...USER_MANAGEMENT_ROLES), (req, res) => {
   try {
@@ -256,13 +313,35 @@ app.get('/api/audit', requireAuth, (req, res) => {
   }
 });
 
+// Snapshot of cities and traps with ETag
+app.get('/api/snapshot', (req, res) => {
+  try {
+    const cities = allQuery(`SELECT * FROM ${TABLES.CITIES} ORDER BY name`);
+    const traps = allQuery(`SELECT * FROM ${TABLES.TRAPS} ORDER BY slot`);
+    const hash = crypto
+      .createHash('sha1')
+      .update(JSON.stringify({ cities, traps }))
+      .digest('hex');
+
+    if (req.headers['if-none-match'] === hash) {
+      return res.status(304).end();
+    }
+
+    res.setHeader('ETag', hash);
+    res.json({ etag: hash, cities, traps, updatedAt: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Export all cities as JSON
 app.get('/api/export', requireAuth, (req, res) => {
   try {
     const cities = allQuery(`SELECT * FROM ${TABLES.CITIES} ORDER BY name`);
+    const traps = allQuery(`SELECT * FROM ${TABLES.TRAPS} ORDER BY slot`);
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', 'attachment; filename="wos-spots.json"');
-    res.json(cities);
+    res.json({ version: 2, cities, traps });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -271,23 +350,40 @@ app.get('/api/export', requireAuth, (req, res) => {
 // Import cities from JSON
 app.post('/api/import', requireRole(...USER_MANAGEMENT_ROLES), (req, res) => {
   try {
-    const cities = req.body;
+    const payload = req.body;
+    let cities = [];
+    let traps = [];
 
-    if (!Array.isArray(cities)) {
-      return res.status(400).json({ error: 'Invalid data format' });
+    if (Array.isArray(payload)) {
+      cities = payload;
+    } else {
+      if (
+        typeof payload !== 'object' ||
+        payload.version !== 2 ||
+        !Array.isArray(payload.cities) ||
+        !Array.isArray(payload.traps)
+      ) {
+        return res.status(400).json({ error: 'Invalid data format' });
+      }
+      cities = payload.cities;
+      traps = payload.traps;
     }
 
     // Clear existing data
     runQuery(`DELETE FROM ${TABLES.CITIES}`);
+    runQuery(`DELETE FROM ${TABLES.TRAPS}`);
 
-    // Insert new data
-    const insertStmt = db.prepare(
+    // Insert cities
+    const insertCity = db.prepare(
       `INSERT INTO ${TABLES.CITIES} (id, name, level, status, x, y, notes, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     );
+    const insertTrap = db.prepare(
+      `INSERT INTO ${TABLES.TRAPS} (id, slot, x, y, color, notes) VALUES (?, ?, ?, ?, ?, ?)`
+    );
 
-    const transaction = db.transaction((data) => {
-      for (const city of data) {
-        insertStmt.run(
+    const transaction = db.transaction(() => {
+      for (const city of cities) {
+        insertCity.run(
           city.id,
           city.name,
           city.level,
@@ -298,10 +394,14 @@ app.post('/api/import', requireRole(...USER_MANAGEMENT_ROLES), (req, res) => {
           city.color
         );
       }
+      for (const trap of traps) {
+        insertTrap.run(trap.id, trap.slot, trap.x, trap.y, trap.color, trap.notes);
+        logAudit(TABLES.TRAPS, ACTIONS.CREATE, trap.id);
+      }
     });
 
-    transaction(cities);
-    return res.json({ success: true, count: cities.length });
+    transaction();
+    return res.json({ success: true, cities: cities.length, traps: traps.length });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

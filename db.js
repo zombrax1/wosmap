@@ -17,6 +17,7 @@ const DB_PATH = path.extname(envPath) === DB_EXTENSION ? envPath : `${envPath}${
 
 const TABLES = {
   CITIES: 'cities',
+  TRAPS: 'traps',
   USERS: 'users',
   AUDIT: 'audit_logs',
 };
@@ -46,6 +47,14 @@ function initializeDatabase() {
       y INTEGER NOT NULL,
       notes TEXT,
       color TEXT DEFAULT '#ec4899'
+    );
+    CREATE TABLE IF NOT EXISTS ${TABLES.TRAPS} (
+      id TEXT PRIMARY KEY,
+      slot INTEGER UNIQUE CHECK(slot IN (1,2)),
+      x INTEGER NOT NULL,
+      y INTEGER NOT NULL,
+      color TEXT NOT NULL DEFAULT '#f59e0b',
+      notes TEXT
     );
     CREATE TABLE IF NOT EXISTS ${TABLES.AUDIT} (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,6 +122,7 @@ function ensureUsersTable() {
 
 function clearDatabase() {
   runQuery(`DELETE FROM ${TABLES.CITIES}`);
+  runQuery(`DELETE FROM ${TABLES.TRAPS}`);
   runQuery(`DELETE FROM ${TABLES.USERS}`);
   runQuery(`DELETE FROM ${TABLES.AUDIT}`);
 }
