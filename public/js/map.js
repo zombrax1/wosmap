@@ -287,7 +287,7 @@ function startBearTrapPlacement(x, y) {
 }
 
 function handleGridClick(e) {
-  const { x, y } = pointToCell({ x: e.clientX, y: e.clientY }, gridWrapper, COLS, ROWS);
+  const { x, y } = pointToCell({ x: e.clientX, y: e.clientY }, grid, COLS, ROWS);
   const trapIdx = trapIndexAt(x, y);
   if (trapIdx >= 0) {
     pendingPlacement = { index: trapIdx };
@@ -304,7 +304,7 @@ function handleGridClick(e) {
 function handleGridDrop(e) {
   e.preventDefault();
   if (!isAdmin) return;
-  const { x, y } = pointToCell({ x: e.clientX, y: e.clientY }, gridWrapper, COLS, ROWS);
+  const { x, y } = pointToCell({ x: e.clientX, y: e.clientY }, grid, COLS, ROWS);
   const cityId = e.dataTransfer.getData(CITY_DRAG_TYPE);
   if (!cityId) return;
   if (cities.some(c => c.x === x && c.y === y)) {
