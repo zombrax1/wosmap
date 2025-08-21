@@ -100,9 +100,9 @@ const trapEditColor = document.getElementById('trapEditColor');
 const saveTrapBtn = document.getElementById('saveTrapBtn');
 let pendingPlacement = null;
 
-grid.addEventListener('click', handleGridClick);
-grid.addEventListener('dragover', (e) => e.preventDefault());
-grid.addEventListener('drop', handleGridDrop);
+gridWrapper.addEventListener('click', handleGridClick);
+gridWrapper.addEventListener('dragover', (e) => e.preventDefault());
+gridWrapper.addEventListener('drop', handleGridDrop);
 
 // Info popup elements
 const infoPopup = document.getElementById('infoPopup');
