@@ -1,6 +1,4 @@
 // ===== Model =====
-const GRID_CELLS = 41; // odd number so we have a single center cell
-const CENTER = Math.floor(GRID_CELLS / 2);
 const BEAR_TRAP_SIZE = 2;
 const BEAR_TRAP_COUNT = 2;
 let bearTraps = Array(BEAR_TRAP_COUNT).fill(null);
@@ -188,13 +186,13 @@ function hexToRgba(hex, alpha) {
 }
 
 function buildGrid() {
-  grid.style.setProperty('--cells', GRID_CELLS);
+  grid.style.setProperty('--cells', COLS);
   grid.innerHTML = '';
 
-  for (let row = 0; row < GRID_CELLS; row++) {
-    for (let col = 0; col < GRID_CELLS; col++) {
-      const x = col - CENTER;
-      const y = row - CENTER;
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const x = col - CENTER_X;
+      const y = row - CENTER_Y;
       const cell = document.createElement('div');
       cell.className = 'relative select-none border border-slate-800/40';
 
@@ -266,7 +264,7 @@ function renderMap() {
 
   // Render all cities (not just filtered ones for map)
   for (const c of cities) {
-    const idx = (c.y + CENTER) * GRID_CELLS + (c.x + CENTER);
+    const idx = (c.y + CENTER_Y) * COLS + (c.x + CENTER_X);
     const cell = cells[idx];
     if (!cell) continue;
 
@@ -342,7 +340,7 @@ function renderList() {
 
 function highlightCityOnMap(city) {
   const cells = grid.children;
-  const idx = (city.y + CENTER) * GRID_CELLS + (city.x + CENTER);
+  const idx = (city.y + CENTER_Y) * COLS + (city.x + CENTER_X);
   const cell = cells[idx];
   if (cell) {
     cell.style.boxShadow = 'inset 0 0 0 3px #3b82f6';
@@ -553,7 +551,7 @@ adminLoginForm.addEventListener('submit', async (e) => {
 // Center view on the grid at start
 function centerView() {
   const cellSize = 42;
-  const contentSize = GRID_CELLS * cellSize;
+  const contentSize = COLS * cellSize;
   scroller.scrollLeft = (contentSize - scroller.clientWidth) / 2;
   scroller.scrollTop = (contentSize - scroller.clientHeight) / 2;
 }
@@ -564,7 +562,7 @@ function runTests() {
   
   // Test 1: Check if grid is built correctly
   const gridCells = grid.children.length;
-  console.assert(gridCells === GRID_CELLS * GRID_CELLS, `Grid should have ${GRID_CELLS * GRID_CELLS} cells, got ${gridCells}`);
+  console.assert(gridCells === COLS * ROWS, `Grid should have ${COLS * ROWS} cells, got ${gridCells}`);
   
   // Test 2: Check if filtering works
   const originalLength = cities.length;
