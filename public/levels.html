@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Whiteout Spot Organizer - Level Colors</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/tailwind.css">
+</head>
+<body class="h-full bg-slate-900 text-slate-100">
+  <div class="h-full flex flex-col">
+    <header class="sticky top-0 z-50 backdrop-blur bg-slate-900/70 border-b border-slate-800">
+      <div class="px-3 sm:px-4 py-3 flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl font-bold tracking-tight">ZOM WOS Spot Organizer</span>
+          <span class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-indigo-600/30 text-indigo-200 border border-indigo-400/30">Beta</span>
+        </div>
+        <div class="ml-auto flex items-center gap-3">
+          <a href="/map" class="text-indigo-300 hover:text-indigo-200 underline underline-offset-4">Map View</a>
+          <a href="/list" class="text-indigo-300 hover:text-indigo-200 underline underline-offset-4">List View</a>
+          <button id="themeToggle" class="p-2 rounded-lg hover:bg-slate-800" title="Toggle theme">🌗</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 min-h-0 p-4">
+      <div class="max-w-md mx-auto space-y-4">
+        <h1 class="text-2xl font-bold">🎨 Level Colors</h1>
+        <form id="levelsForm" class="space-y-4">
+          <div>
+            <label class="text-xs text-slate-300">Level 1</label>
+            <input id="level-1" type="color" class="mt-1 w-full h-10 rounded-xl bg-slate-800 border border-slate-700" />
+          </div>
+          <div>
+            <label class="text-xs text-slate-300">Level 2</label>
+            <input id="level-2" type="color" class="mt-1 w-full h-10 rounded-xl bg-slate-800 border border-slate-700" />
+          </div>
+          <div>
+            <label class="text-xs text-slate-300">Level 3</label>
+            <input id="level-3" type="color" class="mt-1 w-full h-10 rounded-xl bg-slate-800 border border-slate-700" />
+          </div>
+          <div>
+            <label class="text-xs text-slate-300">Level 4</label>
+            <input id="level-4" type="color" class="mt-1 w-full h-10 rounded-xl bg-slate-800 border border-slate-700" />
+          </div>
+          <div>
+            <label class="text-xs text-slate-300">Level 5</label>
+            <input id="level-5" type="color" class="mt-1 w-full h-10 rounded-xl bg-slate-800 border border-slate-700" />
+          </div>
+        </form>
+        <button id="saveBtn" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm">Save</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/theme.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/levels.js"></script>
+</body>
+</html>

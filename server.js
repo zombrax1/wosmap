@@ -87,6 +87,33 @@ app.get('/api/me', (req, res) => {
   res.json({ user: req.session.user || null });
 });
 
+// Level color routes
+app.get('/api/levels', (req, res) => {
+  try {
+    const levels = allQuery(`SELECT level, color FROM ${TABLES.LEVELS} ORDER BY level`);
+    res.json(levels);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/levels', requireAuth, requireRole('admin'), (req, res) => {
+  try {
+    const { level, color } = req.body;
+    runQuery(
+      `INSERT OR REPLACE INTO ${TABLES.LEVELS} (level, color) VALUES (?, ?)`,
+      [level, color]
+    );
+    runQuery(
+      `UPDATE ${TABLES.CITIES} SET color = ? WHERE level = ?`,
+      [color, level]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // City routes
 app.get('/api/cities', (req, res) => {
   try {
@@ -101,6 +128,12 @@ app.post('/api/cities', requireAuth, (req, res) => {
   try {
     const { id, name, level, status, x, y, notes, color } = req.body;
 
+    const levelEntry = getQuery(
+      `SELECT color FROM ${TABLES.LEVELS} WHERE level = ?`,
+      [level]
+    );
+    const finalColor = color || (levelEntry ? levelEntry.color : undefined);
+
     const existing = getQuery(
       `SELECT * FROM ${TABLES.CITIES} WHERE x = ? AND y = ? AND id != ?`,
       [x, y, id]
@@ -114,7 +147,7 @@ app.post('/api/cities', requireAuth, (req, res) => {
 
     runQuery(
       `INSERT OR REPLACE INTO ${TABLES.CITIES} (id, name, level, status, x, y, notes, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, name, level, status, x, y, notes, color]
+      [id, name, level, status, x, y, notes, finalColor]
     );
 
     logAudit(TABLES.CITIES, ACTIONS.CREATE, id);
@@ -129,6 +162,12 @@ app.put('/api/cities/:id', requireAuth, (req, res) => {
     const { id } = req.params;
     const { name, level, status, x, y, notes, color } = req.body;
 
+    const levelEntry = getQuery(
+      `SELECT color FROM ${TABLES.LEVELS} WHERE level = ?`,
+      [level]
+    );
+    const finalColor = color || (levelEntry ? levelEntry.color : undefined);
+
     const existing = getQuery(
       `SELECT * FROM ${TABLES.CITIES} WHERE x = ? AND y = ? AND id != ?`,
       [x, y, id]
@@ -142,7 +181,7 @@ app.put('/api/cities/:id', requireAuth, (req, res) => {
 
     const result = runQuery(
       `UPDATE ${TABLES.CITIES} SET name = ?, level = ?, status = ?, x = ?, y = ?, notes = ?, color = ? WHERE id = ?`,
-      [name, level, status, x, y, notes, color, id]
+      [name, level, status, x, y, notes, finalColor, id]
     );
 
     if (result.changes === 0) {
@@ -422,6 +461,10 @@ app.get('/history', (req, res) => {
 
 app.get('/users', requireRole(...USER_MANAGEMENT_ROLES), (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'users.html'));
+});
+
+app.get('/levels', requireRole('admin'), (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'levels.html'));
 });
 
 app.get('/', (req, res) => {

@@ -34,6 +34,10 @@ function createTestDB() {
       color TEXT NOT NULL DEFAULT '#f59e0b',
       notes TEXT
     );
+    CREATE TABLE IF NOT EXISTS level_colors (
+      level INTEGER PRIMARY KEY,
+      color TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL,
@@ -48,6 +52,17 @@ function createTestDB() {
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  const defaultLevelColors = {
+    1: '#ef4444',
+    2: '#f59e0b',
+    3: '#10b981',
+    4: '#3b82f6',
+    5: '#8b5cf6',
+  };
+  for (const [level, color] of Object.entries(defaultLevelColors)) {
+    db.prepare('INSERT OR IGNORE INTO level_colors (level, color) VALUES (?, ?)').run(level, color);
+  }
   
   return db;
 }
@@ -358,6 +373,14 @@ describe('Database CRUD Operations', () => {
       expect(logs[0].entity).toBe('cities');
       expect(logs[0].action).toBe('create');
       expect(logs[0].entity_id).toBe('city-1');
+    });
+  });
+
+  describe('Level colors table', () => {
+    test('should have default colors for levels 1-5', () => {
+      const levels = db.prepare('SELECT * FROM level_colors ORDER BY level').all();
+      expect(levels).toHaveLength(5);
+      expect(levels[0].color).toBe('#ef4444');
     });
   });
 });
