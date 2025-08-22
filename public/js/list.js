@@ -7,6 +7,7 @@ let snapshotEtag = null;
 /** @type {Array<{id:string,name:string,level?:number,status:'occupied'|'reserved',x:number,y:number,notes?:string,color:string}>} */
 let cities = [];
 let filteredCities = [];
+let levelColors = {};
 
 // Admin functionality
 let isAdmin = false;
@@ -77,6 +78,20 @@ const xEl = document.getElementById('x');
 const yEl = document.getElementById('y');
 const notesEl = document.getElementById('notes');
 const colorEl = document.getElementById('color');
+levelEl.addEventListener('input', () => {
+  colorEl.value = levelColors[levelEl.value] || '#ec4899';
+});
+
+async function loadLevelColors() {
+  try {
+    const res = await fetch('/api/levels');
+    const data = await res.json();
+    levelColors = {};
+    for (const entry of data) levelColors[entry.level] = entry.color;
+  } catch (err) {
+    console.error('Failed to load level colors', err);
+  }
+}
 
 // ===== API Functions =====
 async function loadSnapshot(force = false) {
@@ -372,7 +387,7 @@ function openCreateAt(x, y) {
   xEl.value = x;
   yEl.value = y;
   notesEl.value = '';
-  colorEl.value = '#ec4899';
+  colorEl.value = levelColors[levelEl.value] || '#ec4899';
   deleteBtn.classList.add('hidden');
   cityModal.showModal();
 }
@@ -386,7 +401,7 @@ function openEdit(c) {
   xEl.value = c.x;
   yEl.value = c.y;
   notesEl.value = c.notes || '';
-  colorEl.value = c.color || '#ec4899';
+  colorEl.value = levelColors[c.level] || '#ec4899';
   deleteBtn.classList.remove('hidden');
   cityModal.showModal();
 }
@@ -583,6 +598,7 @@ function runTests() {
 // ===== Boot =====
 checkAdminStatus();
 buildGrid();
+loadLevelColors();
 loadSnapshot();
 setInterval(() => loadSnapshot(), 5000);
 requestAnimationFrame(centerView);

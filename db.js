@@ -20,6 +20,7 @@ const TABLES = {
   TRAPS: 'traps',
   USERS: 'users',
   AUDIT: 'audit_logs',
+  LEVELS: 'level_colors',
 };
 
 const USER_PASSWORD_COLUMN = 'password';
@@ -56,6 +57,10 @@ function initializeDatabase() {
       color TEXT NOT NULL DEFAULT '#f59e0b',
       notes TEXT
     );
+    CREATE TABLE IF NOT EXISTS ${TABLES.LEVELS} (
+      level INTEGER PRIMARY KEY,
+      color TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS ${TABLES.AUDIT} (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       entity TEXT NOT NULL,
@@ -66,6 +71,21 @@ function initializeDatabase() {
   `);
 
   ensureUsersTable();
+
+  // Seed default level colors (1-5)
+  const defaultLevelColors = {
+    1: '#ef4444',
+    2: '#f59e0b',
+    3: '#10b981',
+    4: '#3b82f6',
+    5: '#8b5cf6',
+  };
+  for (const [level, color] of Object.entries(defaultLevelColors)) {
+    runQuery(
+      `INSERT OR IGNORE INTO ${TABLES.LEVELS} (level, color) VALUES (?, ?)`,
+      [level, color]
+    );
+  }
 
   const admin = getQuery(
     `SELECT ${USER_PASSWORD_COLUMN} FROM ${TABLES.USERS} WHERE username = ?`,
