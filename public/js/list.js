@@ -432,8 +432,15 @@ cityForm.addEventListener('submit', async (e) => {
 deleteBtn.addEventListener('click', async () => {
   const id = idEl.value;
   if (!id) return;
-  
-  if (confirm('Are you sure you want to delete this city?')) {
+
+  const result = await Swal.fire({
+    title: 'Delete this city?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Delete'
+  });
+
+  if (result.isConfirmed) {
     const success = await deleteCity(id);
     if (success) {
       cityModal.close();
