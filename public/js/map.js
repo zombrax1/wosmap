@@ -105,15 +105,6 @@ gridWrapper.addEventListener('click', handleGridClick);
 gridWrapper.addEventListener('dragover', (e) => e.preventDefault());
 gridWrapper.addEventListener('drop', handleGridDrop);
 
-// Info popup elements
-const infoPopup = document.getElementById('infoPopup');
-const infoContent = document.getElementById('infoContent');
-const infoAddCityBtn = document.getElementById('infoAddCityBtn');
-const infoAddBearBtn = document.getElementById('infoAddBearBtn');
-const infoEditBtn = document.getElementById('infoEditBtn');
-const infoDeleteBtn = document.getElementById('infoDeleteBtn');
-const infoCloseBtn = document.getElementById('infoCloseBtn');
-
 // Form fields
 const idEl = document.getElementById('cityId');
 const nameEl = document.getElementById('name');
@@ -479,8 +470,15 @@ cityForm.addEventListener('submit', async (e) => {
 deleteBtn.addEventListener('click', async () => {
   const id = idEl.value;
   if (!id) return;
-  
-  if (confirm('Are you sure you want to delete this city?')) {
+
+  const result = await Swal.fire({
+    title: 'Delete this city?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Delete'
+  });
+
+  if (result.isConfirmed) {
     const success = await deleteCity(id);
     if (success) {
       cityModal.close();
@@ -541,14 +539,8 @@ autoInsertBtn.addEventListener('click', async () => {
 
 // Show info popup for a cell or city
 function showInfoPopup(city, x, y) {
-  infoContent.innerHTML = '';
-  infoAddCityBtn.classList.add('hidden');
-  infoAddBearBtn.classList.add('hidden');
-  infoEditBtn.classList.add('hidden');
-  infoDeleteBtn.classList.add('hidden');
-
   if (city) {
-    infoContent.innerHTML = `
+    const html = `
       <div><strong>${city.name}</strong></div>
       <div>Level: ${city.level || 'Unknown'}</div>
       <div>Status: ${city.status}</div>
@@ -557,47 +549,65 @@ function showInfoPopup(city, x, y) {
     `;
 
     if (isAdmin) {
-      infoEditBtn.classList.remove('hidden');
-      infoDeleteBtn.classList.remove('hidden');
-
-      infoEditBtn.onclick = () => {
-        infoPopup.close();
-        openEdit(city);
-      };
-
-      infoDeleteBtn.onclick = async () => {
-        infoPopup.close();
-        await deleteCity(city.id);
-      };
+      Swal.fire({
+        title: 'City Info',
+        html,
+        showDenyButton: true,
+        showCancelButton: true,
+        confirmButtonText: 'Edit',
+        denyButtonText: 'Delete'
+      }).then(async (result) => {
+        if (result.isConfirmed) {
+          openEdit(city);
+        } else if (result.isDenied) {
+          await deleteCity(city.id);
+        }
+      });
+    } else {
+      Swal.fire({
+        title: city.name,
+        html
+      });
     }
   } else {
-    infoContent.textContent = `No city at (${x}, ${y})`;
-
+    const title = `(${x}, ${y})`;
     if (isAdmin) {
-      infoAddCityBtn.classList.remove('hidden');
-      infoAddBearBtn.classList.remove('hidden');
-
-      infoAddCityBtn.onclick = () => {
-        infoPopup.close();
-        openCreateAt(x, y);
-      };
-
-      infoAddBearBtn.onclick = () => {
-        infoPopup.close();
-        startBearTrapPlacement(x, y);
-      };
+      Swal.fire({
+        title,
+        text: 'No city here. What would you like to do?',
+        showDenyButton: true,
+        showCancelButton: true,
+        confirmButtonText: 'Add City',
+        denyButtonText: 'Add Bear Trap'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          openCreateAt(x, y);
+        } else if (result.isDenied) {
+          startBearTrapPlacement(x, y);
+        }
+      });
+    } else {
+      Swal.fire({
+        title,
+        text: 'No city here.'
+      });
     }
   }
-
-  infoPopup.showModal();
 }
 
-infoCloseBtn.addEventListener('click', () => infoPopup.close());
 
 clearAllBtn.addEventListener('click', async () => {
   if (!isAdmin) return;
-  
-  if (confirm('Clear all data? This cannot be undone.')) {
+
+  const result = await Swal.fire({
+    title: 'Clear all data?',
+    text: 'This cannot be undone.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Yes, clear'
+  });
+
+  if (result.isConfirmed) {
     try {
       const response = await fetch('/api/import', {
         method: 'POST',
