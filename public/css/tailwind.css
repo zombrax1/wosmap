@@ -1,31 +1,5 @@
 /* Custom styles for Whiteout Spot Organizer */
 
-/* Mobile-first responsive design */
-@media (max-width: 768px) {
-  .city {
-    font-size: 9px !important;
-    padding: 2px !important;
-  }
-  
-  .city:hover {
-    transform: none;
-  }
-  
-  #grid {
-    --cells: 31 !important;
-    grid-template-columns: repeat(var(--cells), 32px) !important;
-    grid-auto-rows: 32px !important;
-  }
-  
-  .city-list-item {
-    padding: 0.75rem !important;
-  }
-  
-  .city-list-item:hover {
-    transform: none;
-  }
-}
-
 /* Smooth transitions */
 .city {
   transition: all 0.2s ease-in-out;
