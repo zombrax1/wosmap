@@ -1,9 +1,15 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+
+// Disable db singleton when app is running to avoid file locks during tests
+process.env.DB_SINGLETON = process.env.DB_SINGLETON || 'false';
 
 const {
   TABLES,
@@ -13,7 +19,7 @@ const {
   allQuery,
   logAudit,
   initializeDatabase,
-  db,
+  withDb,
 } = require('./db');
 
 const PORT = process.env.PORT || 3000;
@@ -24,7 +30,24 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const app = express();
 
-app.use(cors());
+// Trust proxy (fixes rate-limit IP detection when X-Forwarded-For is present)
+// Always enabled to avoid ERR_ERL_UNEXPECTED_X_FORWARDED_FOR in diverse setups.
+app.set('trust proxy', 1);
+
+// Security headers
+app.use(helmet());
+// CORS (restrict by default; allow overriding via env)
+const ALLOW_ORIGIN = process.env.CORS_ORIGIN || null;
+if (ALLOW_ORIGIN) {
+  app.use(
+    cors({
+      origin: ALLOW_ORIGIN,
+      credentials: true,
+    })
+  );
+}
+// Compression for better performance
+app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static(PUBLIC_DIR));
@@ -33,10 +56,21 @@ app.use(
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    name: 'sid',
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    },
   })
 );
 
 initializeDatabase();
+
+// During Jest tests on Windows, unlinking the DB file can fail if the
+// connection remains open. Register a test-only cleanup to close it.
+// Note: DB connections are opened per-operation in db.js when DB_SINGLETON=false
 
 function requireAuth(req, res, next) {
   if (!req.session.user) {
@@ -54,8 +88,67 @@ function requireRole(...roles) {
   };
 }
 
+// Basic validators (avoid extra deps)
+function isHexColor(v) {
+  return typeof v === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v);
+}
+function isInt(v) {
+  return Number.isInteger(Number(v));
+}
+function isNumberLike(v) {
+  return v === null || v === undefined || (typeof v === 'number' && isFinite(v)) || (typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v)));
+}
+function validateCityPayload(body) {
+  const { id, name, level, status, x, y, px, py, notes, color } = body;
+  if (!id || typeof id !== 'string') return 'Invalid id';
+  if (!name || typeof name !== 'string' || name.length > 100) return 'Invalid name';
+  if (level !== undefined && !isInt(level)) return 'Invalid level';
+  if (!['occupied', 'reserved'].includes(status)) return 'Invalid status';
+  if (!isInt(x) || !isInt(y)) return 'Invalid coordinates';
+  if (!(px === undefined || px === null || isNumberLike(px))) return 'Invalid px';
+  if (!(py === undefined || py === null || isNumberLike(py))) return 'Invalid py';
+  if (color !== undefined && color !== null && !isHexColor(color)) return 'Invalid color';
+  if (notes !== undefined && notes !== null && typeof notes !== 'string') return 'Invalid notes';
+  return null;
+}
+
+// Helpers
+function isInsideTrapCell(x, y) {
+  // traps are 2x2 starting at (trap.x, trap.y)
+  const traps = allQuery(`SELECT x, y FROM ${TABLES.TRAPS}`);
+  return traps.some((t) => x >= t.x && x <= t.x + 1 && y >= t.y && y <= t.y + 1);
+}
+function validateTrapPayload(body) {
+  const { id, slot, x, y, color, notes } = body;
+  if (!id || typeof id !== 'string') return 'Invalid id';
+  if (!isInt(slot) || ![1,2,3].includes(Number(slot))) return 'Invalid slot';
+  if (!isInt(x) || !isInt(y)) return 'Invalid coordinates';
+  if (color !== undefined && !isHexColor(color)) return 'Invalid color';
+  if (notes !== undefined && typeof notes !== 'string') return 'Invalid notes';
+  return null;
+}
+function validateUserPayload(body, { allowEmptyPassword = false } = {}) {
+  const { id, username, password, role } = body;
+  if (!id || typeof id !== 'string') return 'Invalid id';
+  if (!username || typeof username !== 'string' || username.length > 50) return 'Invalid username';
+  if (!allowEmptyPassword) {
+    if (!password || typeof password !== 'string' || password.length < 2)
+      return 'Invalid password (min 2 chars)';
+  }
+  if (!role || !['viewer', 'moderator', 'admin'].includes(role)) return 'Invalid role';
+  return null;
+}
+
+// Rate limit login to mitigate brute-force
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Authentication routes
-app.post('/api/login', (req, res) => {
+app.post('/api/login', loginLimiter, (req, res) => {
   try {
     const { username, password } = req.body;
     const user = getQuery(
@@ -100,6 +193,9 @@ app.get('/api/levels', (req, res) => {
 app.post('/api/levels', requireAuth, requireRole('admin'), (req, res) => {
   try {
     const { level, color } = req.body;
+    if (!isInt(level) || !isHexColor(color)) {
+      return res.status(400).json({ error: 'Invalid level or color' });
+    }
     runQuery(
       `INSERT OR REPLACE INTO ${TABLES.LEVELS} (level, color) VALUES (?, ?)`,
       [level, color]
@@ -126,7 +222,13 @@ app.get('/api/cities', (req, res) => {
 
 app.post('/api/cities', requireAuth, (req, res) => {
   try {
-    const { id, name, level, status, x, y, notes, color } = req.body;
+    const { id, name, level, status, x, y, px, py, notes, color } = req.body;
+    const validationError = validateCityPayload({ id, name, level, status, x, y, px, py, notes, color });
+    if (validationError) return res.status(400).json({ error: validationError });
+
+    if (isInsideTrapCell(Number(x), Number(y))) {
+      return res.status(400).json({ error: 'Cannot place a city on a bear trap area' });
+    }
 
     const levelEntry = getQuery(
       `SELECT color FROM ${TABLES.LEVELS} WHERE level = ?`,
@@ -134,23 +236,18 @@ app.post('/api/cities', requireAuth, (req, res) => {
     );
     const finalColor = color || (levelEntry ? levelEntry.color : undefined);
 
-    const existing = getQuery(
-      `SELECT * FROM ${TABLES.CITIES} WHERE x = ? AND y = ? AND id != ?`,
-      [x, y, id]
-    );
-
-    if (existing) {
-      return res
-        .status(400)
-        .json({ error: `Tile (${x}, ${y}) already has ${existing.name}. Delete or move it first.` });
-    }
+    // Allow multiple cities to share same tile; client enforces visual non-overlap
 
     runQuery(
-      `INSERT OR REPLACE INTO ${TABLES.CITIES} (id, name, level, status, x, y, notes, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, name, level, status, x, y, notes, finalColor]
+      `INSERT OR REPLACE INTO ${TABLES.CITIES} (id, name, level, status, x, y, px, py, notes, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, name, level, status, x, y, px ?? null, py ?? null, notes, finalColor]
     );
 
-    logAudit(TABLES.CITIES, ACTIONS.CREATE, id);
+    const actor = req.session?.user?.username || 'system';
+    logAudit(TABLES.CITIES, ACTIONS.CREATE, id, {
+      user: actor,
+      details: `${actor} city create (${x}, ${y}) ${name}`,
+    });
     return res.json({ id, success: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -160,7 +257,9 @@ app.post('/api/cities', requireAuth, (req, res) => {
 app.put('/api/cities/:id', requireAuth, (req, res) => {
   try {
     const { id } = req.params;
-    const { name, level, status, x, y, notes, color } = req.body;
+    const { name, level, status, x, y, px, py, notes, color } = req.body;
+    const validationError = validateCityPayload({ id, name, level, status, x, y, px, py, notes, color });
+    if (validationError) return res.status(400).json({ error: validationError });
 
     const levelEntry = getQuery(
       `SELECT color FROM ${TABLES.LEVELS} WHERE level = ?`,
@@ -168,27 +267,40 @@ app.put('/api/cities/:id', requireAuth, (req, res) => {
     );
     const finalColor = color || (levelEntry ? levelEntry.color : undefined);
 
-    const existing = getQuery(
-      `SELECT * FROM ${TABLES.CITIES} WHERE x = ? AND y = ? AND id != ?`,
-      [x, y, id]
-    );
+    // Allow multiple cities to share same tile; client enforces visual non-overlap
 
-    if (existing) {
-      return res
-        .status(400)
-        .json({ error: `Tile (${x}, ${y}) already has ${existing.name}. Delete or move it first.` });
+    if (isInsideTrapCell(Number(x), Number(y))) {
+      return res.status(400).json({ error: 'Cannot place a city on a bear trap area' });
     }
 
+    // Capture existing for diffing
+    const existing = getQuery(
+      `SELECT name, level, status, x, y, px, py, notes, color FROM ${TABLES.CITIES} WHERE id = ?`,
+      [id]
+    );
     const result = runQuery(
-      `UPDATE ${TABLES.CITIES} SET name = ?, level = ?, status = ?, x = ?, y = ?, notes = ?, color = ? WHERE id = ?`,
-      [name, level, status, x, y, notes, finalColor, id]
+      `UPDATE ${TABLES.CITIES} SET name = ?, level = ?, status = ?, x = ?, y = ?, px = ?, py = ?, notes = ?, color = ? WHERE id = ?`,
+      [name, level, status, x, y, px ?? null, py ?? null, notes, finalColor, id]
     );
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'City not found' });
     }
-
-    logAudit(TABLES.CITIES, ACTIONS.UPDATE, id);
+    const actor = req.session?.user?.username || 'system';
+    // Build a concise change summary
+    const changes = [];
+    if (existing) {
+      if (existing.name !== name) changes.push('change name');
+      if (existing.status !== status) changes.push(`status ${existing.status}->${status}`);
+      if (existing.level !== level) changes.push(`level ${existing.level ?? ''}->${level ?? ''}`.trim());
+      if (existing.x !== x || existing.y !== y) changes.push(`move (${existing.x},${existing.y})->(${x},${y})`);
+      if (existing.px !== px || existing.py !== py) changes.push(`abs-pos ${existing.px ?? ''},${existing.py ?? ''}->${px ?? ''},${py ?? ''}`);
+    }
+    const summary = changes.length ? changes.join(', ') : 'update';
+    logAudit(TABLES.CITIES, ACTIONS.UPDATE, id, {
+      user: actor,
+      details: `${actor} city update (${x}, ${y}) ${summary} ${name}`.trim(),
+    });
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -198,13 +310,19 @@ app.put('/api/cities/:id', requireAuth, (req, res) => {
 app.delete('/api/cities/:id', requireAuth, (req, res) => {
   try {
     const { id } = req.params;
+    const existing = getQuery(`SELECT name, x, y FROM ${TABLES.CITIES} WHERE id = ?`, [id]);
     const result = runQuery(`DELETE FROM ${TABLES.CITIES} WHERE id = ?`, [id]);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'City not found' });
     }
-
-    logAudit(TABLES.CITIES, ACTIONS.DELETE, id);
+    const actor = req.session?.user?.username || 'system';
+    logAudit(TABLES.CITIES, ACTIONS.DELETE, id, {
+      user: actor,
+      details: existing
+        ? `${actor} city deleted (${existing.x}, ${existing.y}) ${existing.name}`
+        : `${actor} city deleted`,
+    });
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -224,11 +342,17 @@ app.get('/api/traps', (req, res) => {
 app.post('/api/traps', requireAuth, requireRole('admin'), (req, res) => {
   try {
     const { id, slot, x, y, color, notes } = req.body;
+    const validationError = validateTrapPayload({ id, slot, x, y, color, notes });
+    if (validationError) return res.status(400).json({ error: validationError });
     runQuery(
       `INSERT OR REPLACE INTO ${TABLES.TRAPS} (id, slot, x, y, color, notes) VALUES (?, ?, ?, ?, ?, ?)`,
       [id, slot, x, y, color, notes]
     );
-    logAudit(TABLES.TRAPS, ACTIONS.CREATE, id);
+    const actor = req.session?.user?.username || 'system';
+    logAudit(TABLES.TRAPS, ACTIONS.CREATE, id, {
+      user: actor,
+      details: `${actor} trap create (${x}, ${y}) slot ${slot}`,
+    });
     return res.json({ id, success: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -239,6 +363,8 @@ app.put('/api/traps/:id', requireAuth, requireRole('admin'), (req, res) => {
   try {
     const { id } = req.params;
     const { slot, x, y, color, notes } = req.body;
+    const validationError = validateTrapPayload({ id, slot, x, y, color, notes });
+    if (validationError) return res.status(400).json({ error: validationError });
     const result = runQuery(
       `UPDATE ${TABLES.TRAPS} SET slot = ?, x = ?, y = ?, color = ?, notes = ? WHERE id = ?`,
       [slot, x, y, color, notes, id]
@@ -246,7 +372,11 @@ app.put('/api/traps/:id', requireAuth, requireRole('admin'), (req, res) => {
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Trap not found' });
     }
-    logAudit(TABLES.TRAPS, ACTIONS.UPDATE, id);
+    const actor = req.session?.user?.username || 'system';
+    logAudit(TABLES.TRAPS, ACTIONS.UPDATE, id, {
+      user: actor,
+      details: `${actor} trap update (${x}, ${y}) slot ${slot}`,
+    });
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -256,11 +386,18 @@ app.put('/api/traps/:id', requireAuth, requireRole('admin'), (req, res) => {
 app.delete('/api/traps/:id', requireAuth, requireRole('admin'), (req, res) => {
   try {
     const { id } = req.params;
+    const existing = getQuery(`SELECT slot, x, y FROM ${TABLES.TRAPS} WHERE id = ?`, [id]);
     const result = runQuery(`DELETE FROM ${TABLES.TRAPS} WHERE id = ?`, [id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Trap not found' });
     }
-    logAudit(TABLES.TRAPS, ACTIONS.DELETE, id);
+    const actor = req.session?.user?.username || 'system';
+    logAudit(TABLES.TRAPS, ACTIONS.DELETE, id, {
+      user: actor,
+      details: existing
+        ? `${actor} trap deleted (${existing.x}, ${existing.y}) slot ${existing.slot}`
+        : `${actor} trap deleted`,
+    });
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -283,12 +420,18 @@ app.post(
   (req, res) => {
     try {
       const { id, username, password, role } = req.body;
+      const validationError = validateUserPayload({ id, username, password, role });
+      if (validationError) return res.status(400).json({ error: validationError });
       const hashedPassword = bcrypt.hashSync(password, BCRYPT_ROUNDS);
       runQuery(
         `INSERT OR REPLACE INTO ${TABLES.USERS} (id, username, password, role) VALUES (?, ?, ?, ?)`,
         [id, username, hashedPassword, role]
       );
-      logAudit(TABLES.USERS, ACTIONS.CREATE, id);
+      const actor = req.session?.user?.username || 'system';
+      logAudit(TABLES.USERS, ACTIONS.CREATE, id, {
+        user: actor,
+        details: `${actor} user create ${username}`,
+      });
       return res.json({ id, success: true });
     } catch (error) {
       return res.status(500).json({ error: error.message });
@@ -303,6 +446,13 @@ app.put(
     try {
       const { id } = req.params;
       const { username, password, role } = req.body;
+      if (password) {
+        const validationError = validateUserPayload({ id, username, password, role });
+        if (validationError) return res.status(400).json({ error: validationError });
+      } else {
+        const validationError = validateUserPayload({ id, username, password: 'stub', role }, { allowEmptyPassword: true });
+        if (validationError) return res.status(400).json({ error: validationError });
+      }
       const sql = password
         ? `UPDATE ${TABLES.USERS} SET username = ?, password = ?, role = ? WHERE id = ?`
         : `UPDATE ${TABLES.USERS} SET username = ?, role = ? WHERE id = ?`;
@@ -314,7 +464,11 @@ app.put(
       if (result.changes === 0) {
         return res.status(404).json({ error: 'User not found' });
       }
-      logAudit(TABLES.USERS, ACTIONS.UPDATE, id);
+      const actor = req.session?.user?.username || 'system';
+      logAudit(TABLES.USERS, ACTIONS.UPDATE, id, {
+        user: actor,
+        details: `${actor} user update ${username}`,
+      });
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({ error: error.message });
@@ -334,7 +488,11 @@ app.delete(
         return res.status(404).json({ error: 'User not found' });
       }
 
-      logAudit(TABLES.USERS, ACTIONS.DELETE, id);
+      const actor = req.session?.user?.username || 'system';
+      logAudit(TABLES.USERS, ACTIONS.DELETE, id, {
+        user: actor,
+        details: `${actor} user deleted ${id}`,
+      });
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({ error: error.message });
@@ -408,38 +566,40 @@ app.post('/api/import', requireRole(...USER_MANAGEMENT_ROLES), (req, res) => {
       traps = payload.traps;
     }
 
-    // Clear existing data
-    runQuery(`DELETE FROM ${TABLES.CITIES}`);
-    runQuery(`DELETE FROM ${TABLES.TRAPS}`);
+    // Use a single connection + transaction for batch insert
+    withDb((d) => {
+      d.prepare(`DELETE FROM ${TABLES.CITIES}`).run();
+      d.prepare(`DELETE FROM ${TABLES.TRAPS}`).run();
 
-    // Insert cities
-    const insertCity = db.prepare(
-      `INSERT INTO ${TABLES.CITIES} (id, name, level, status, x, y, notes, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-    const insertTrap = db.prepare(
-      `INSERT INTO ${TABLES.TRAPS} (id, slot, x, y, color, notes) VALUES (?, ?, ?, ?, ?, ?)`
-    );
+      const insertCity = d.prepare(
+        `INSERT INTO ${TABLES.CITIES} (id, name, level, status, x, y, px, py, notes, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      const insertTrap = d.prepare(
+        `INSERT INTO ${TABLES.TRAPS} (id, slot, x, y, color, notes) VALUES (?, ?, ?, ?, ?, ?)`
+      );
 
-    const transaction = db.transaction(() => {
-      for (const city of cities) {
-        insertCity.run(
-          city.id,
-          city.name,
-          city.level,
-          city.status,
-          city.x,
-          city.y,
-          city.notes,
-          city.color
-        );
-      }
-      for (const trap of traps) {
-        insertTrap.run(trap.id, trap.slot, trap.x, trap.y, trap.color, trap.notes);
-        logAudit(TABLES.TRAPS, ACTIONS.CREATE, trap.id);
-      }
+      const transaction = d.transaction(() => {
+        for (const city of cities) {
+          insertCity.run(
+            city.id,
+            city.name,
+            city.level,
+            city.status,
+            city.x,
+            city.y,
+            city.px ?? null,
+            city.py ?? null,
+            city.notes,
+            city.color
+          );
+        }
+        for (const trap of traps) {
+          insertTrap.run(trap.id, trap.slot, trap.x, trap.y, trap.color, trap.notes);
+          logAudit(TABLES.TRAPS, ACTIONS.CREATE, trap.id);
+        }
+      });
+      transaction();
     });
-
-    transaction();
     return res.json({ success: true, cities: cities.length, traps: traps.length });
   } catch (error) {
     return res.status(500).json({ error: error.message });

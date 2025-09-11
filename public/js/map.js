@@ -17,6 +17,8 @@ let isAdmin = false;
 let currentUser = 'viewer';
 let selectedCityId = null;
 let touchDrag = null; // { id, start, last }
+let trapDrag = null; // { index, dragging }
+let trapPressTimer = null;
 
 async function checkAdminStatus() {
   const user = await Auth.fetchUser();
@@ -64,6 +66,7 @@ function updateMenuUI() {
 const grid = document.getElementById('grid');
 const gridWrapper = document.getElementById('gridWrapper');
 const scroller = document.getElementById('mapScroller');
+const overlay = document.getElementById('overlay');
 
 const cityModal = document.getElementById('cityModal');
 const cityForm = document.getElementById('cityForm');
@@ -111,6 +114,96 @@ let pendingPlacement = null;
 gridWrapper.addEventListener('click', handleGridClick);
 gridWrapper.addEventListener('dragover', (e) => e.preventDefault());
 gridWrapper.addEventListener('drop', handleGridDrop);
+
+// Trap move via long-press on tiles (mobile) and long-press mouse (desktop)
+// Mobile touch
+grid.addEventListener('touchstart', (e) => {
+  if (!isAdmin) return;
+  const { x, y } = eventToCell(e);
+  const idx = trapIndexAt(x, y);
+  if (idx < 0) return;
+  e.preventDefault();
+  clearTimeout(trapPressTimer);
+  trapDrag = { index: idx, dragging: false };
+  trapPressTimer = setTimeout(() => {
+    if (!trapDrag) return;
+    trapDrag.dragging = true;
+    lockMapScroll(true);
+    const { px, py } = eventToOverlayPoint(e);
+    showDragGhost(px, py, BEAR_TRAP_SIZE * CELL_SIZE_PX, true, `T${idx + 1}`);
+  }, LONG_PRESS_MS);
+}, { passive: false });
+
+grid.addEventListener('touchmove', (e) => {
+  if (!isAdmin || !trapDrag) return;
+  if (!trapDrag.dragging) return; // ignore until long-press armed
+  e.preventDefault();
+  const { px, py } = eventToOverlayPoint(e);
+  showDragGhost(px, py, BEAR_TRAP_SIZE * CELL_SIZE_PX, true, `T${trapDrag.index + 1}`);
+}, { passive: false });
+
+grid.addEventListener('touchend', async (e) => {
+  if (!isAdmin || !trapDrag) return;
+  clearTimeout(trapPressTimer);
+  lockMapScroll(false);
+  const active = trapDrag;
+  trapDrag = null;
+  clearDragGhost();
+  if (!active.dragging) return; // was just a tap
+  const { px, py } = eventToOverlayPoint(e);
+  const tile = pxToTile(px, py);
+  const current = bearTraps[active.index];
+  if (current && (tile.x !== current.x || tile.y !== current.y)) {
+    await setBearTrap(active.index, { x: tile.x, y: tile.y }, current.color || '#f59e0b');
+  }
+}, { passive: false });
+
+grid.addEventListener('touchcancel', () => {
+  clearTimeout(trapPressTimer);
+  lockMapScroll(false);
+  trapDrag = null;
+  clearDragGhost();
+});
+
+// Desktop long-press to move trap
+let trapMouseDragging = null; // { index }
+let trapMouseTimer = null;
+const onTrapMouseMove = (e) => {
+  if (!trapMouseDragging) return;
+  const { px, py } = eventToOverlayPoint(e);
+  showDragGhost(px, py, BEAR_TRAP_SIZE * CELL_SIZE_PX, true, `T${trapMouseDragging.index + 1}`);
+};
+const onTrapMouseUp = async (e) => {
+  document.removeEventListener('mousemove', onTrapMouseMove);
+  document.removeEventListener('mouseup', onTrapMouseUp);
+  clearTimeout(trapMouseTimer);
+  if (!trapMouseDragging) { clearDragGhost(); return; }
+  const idx = trapMouseDragging.index;
+  trapMouseDragging = null;
+  const { px, py } = eventToOverlayPoint(e);
+  clearDragGhost();
+  const tile = pxToTile(px, py);
+  const current = bearTraps[idx];
+  if (current && (tile.x !== current.x || tile.y !== current.y)) {
+    await setBearTrap(idx, { x: tile.x, y: tile.y }, current.color || '#f59e0b');
+  }
+};
+
+grid.addEventListener('mousedown', (e) => {
+  if (!isAdmin) return;
+  const { x, y } = eventToCell(e);
+  const idx = trapIndexAt(x, y);
+  if (idx < 0) return;
+  e.preventDefault();
+  clearTimeout(trapMouseTimer);
+  trapMouseDragging = { index: idx };
+  trapMouseTimer = setTimeout(() => {
+    if (!trapMouseDragging) return;
+    document.addEventListener('mousemove', onTrapMouseMove);
+    document.addEventListener('mouseup', onTrapMouseUp);
+  }, LONG_PRESS_MS);
+});
+
 
 // Info popup elements
 const infoPopup = document.getElementById('infoPopup');
@@ -233,6 +326,52 @@ function updateGridDimensions() {
   // Sync grid template sizes with current CELL_SIZE_PX
   grid.style.gridTemplateColumns = `repeat(var(--cells), ${CELL_SIZE_PX}px)`;
   grid.style.gridAutoRows = `${CELL_SIZE_PX}px`;
+  if (overlay) {
+    overlay.style.width = `${COLS * CELL_SIZE_PX}px`;
+    overlay.style.height = `${ROWS * CELL_SIZE_PX}px`;
+    overlay.style.zIndex = '5';
+    overlay.style.pointerEvents = 'auto';
+  }
+}
+
+// Disable/enable map scrolling during drag on mobile
+function lockMapScroll(locked) {
+  if (!scroller) return;
+  if (locked) {
+    scroller.style.touchAction = 'none';
+    scroller.style.overflow = 'hidden';
+  } else {
+    scroller.style.touchAction = '';
+    scroller.style.overflow = '';
+  }
+}
+
+// === Pixel helpers for free placement ===
+function cityCenterPx(city) {
+  const col = city.x + CENTER_X;
+  const row = city.y + CENTER_Y;
+  const fallbackX = col * CELL_SIZE_PX + CELL_SIZE_PX / 2;
+  const fallbackY = row * CELL_SIZE_PX + CELL_SIZE_PX / 2;
+  return { px: city.px ?? fallbackX, py: city.py ?? fallbackY };
+}
+
+function pxToTile(px, py) {
+  const col = Math.floor(px / CELL_SIZE_PX);
+  const row = Math.floor(py / CELL_SIZE_PX);
+  return { x: col - CENTER_X, y: row - CENTER_Y };
+}
+
+// Prevent overlapping in pixel space (1.5 tiles square)
+function wouldOverlapAtPx(px, py, ignoreCityId = null) {
+  const size = CELL_SIZE_PX * 1.5;
+  for (const c of cities) {
+    if (ignoreCityId && c.id === ignoreCityId) continue;
+    const { px: cx, py: cy } = cityCenterPx(c);
+    if (Math.abs(px - cx) < size && Math.abs(py - cy) < size) return true;
+  }
+
+  // Note: trap movement is handled via long-press on tiles; overlay handles are disabled
+  return false;
 }
 
 function updateTrapLegend() {
@@ -344,15 +483,67 @@ function startBearTrapPlacement(x, y) {
 }
 
 function eventToCell(e) {
-  const cell = e.target.closest('[data-x]');
+  const cell = e.target && e.target.closest ? e.target.closest('[data-x]') : null;
   if (cell) {
     return { x: Number(cell.dataset.x), y: Number(cell.dataset.y) };
   }
-  return pointToCell({ x: e.clientX, y: e.clientY }, grid, COLS, ROWS);
+  // Support touch events
+  let cx, cy;
+  if (e && e.touches && e.touches[0]) {
+    cx = e.touches[0].clientX; cy = e.touches[0].clientY;
+  } else if (e && e.changedTouches && e.changedTouches[0]) {
+    cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY;
+  } else {
+    cx = e.clientX; cy = e.clientY;
+  }
+  return pointToCell({ x: cx, y: cy }, grid, COLS, ROWS);
+}
+
+function eventToOverlayPoint(e) {
+  const rect = grid.getBoundingClientRect();
+  const scale = Number(zoom.value) / 100;
+  let cx, cy;
+  if (e && e.touches && e.touches[0]) {
+    cx = e.touches[0].clientX; cy = e.touches[0].clientY;
+  } else if (e && e.changedTouches && e.changedTouches[0]) {
+    cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY;
+  } else {
+    cx = e.clientX; cy = e.clientY;
+  }
+  const px = (cx - rect.left) / scale;
+  const py = (cy - rect.top) / scale;
+  return { px: Math.round(px), py: Math.round(py) };
+}
+
+// Drag ghost preview (follows finger/mouse)
+let dragGhost = null;
+function showDragGhost(px, py, size, ok, label) {
+  if (!overlay) return;
+  if (!dragGhost) {
+    dragGhost = document.createElement('div');
+    dragGhost.className = 'absolute pointer-events-none grid place-items-center';
+    dragGhost.style.borderRadius = '12px';
+    dragGhost.style.background = 'rgba(255,255,255,0.08)';
+    dragGhost.style.color = '#fff';
+    dragGhost.style.fontSize = '10px';
+    dragGhost.style.zIndex = '100';
+    overlay.appendChild(dragGhost);
+  }
+  dragGhost.style.width = `${size}px`;
+  dragGhost.style.height = `${size}px`;
+  dragGhost.style.left = `${Math.round(px - size / 2)}px`;
+  dragGhost.style.top = `${Math.round(py - size / 2)}px`;
+  dragGhost.style.border = `2px solid ${ok ? '#22d3ee' : '#ef4444'}`;
+  dragGhost.textContent = label || '';
+}
+function clearDragGhost() {
+  if (dragGhost && dragGhost.parentNode) dragGhost.parentNode.removeChild(dragGhost);
+  dragGhost = null;
 }
 
 function handleGridClick(e) {
   const { x, y } = eventToCell(e);
+  const abs = eventToOverlayPoint(e);
   const trapIdx = trapIndexAt(x, y);
   if (trapIdx >= 0) {
     pendingPlacement = { index: trapIdx };
@@ -363,7 +554,7 @@ function handleGridClick(e) {
     return;
   }
   const existing = cities.find(c => c.x === x && c.y === y);
-  showInfoPopup(existing, x, y);
+  showInfoPopup(existing, x, y, abs);
 }
 
 function handleGridDrop(e) {
@@ -372,13 +563,14 @@ function handleGridDrop(e) {
   const { x, y } = eventToCell(e);
   const cityId = e.dataTransfer.getData(CITY_DRAG_TYPE);
   if (!cityId) return;
-  if (cities.some(c => c.x === x && c.y === y)) {
-    alert('Cell already occupied');
+  const abs = eventToOverlayPoint(e);
+  if (wouldOverlapAtPx(abs.px, abs.py, cityId)) {
+    alert('Placement would overlap another city');
     return;
   }
   const city = cities.find(c => c.id === cityId);
   if (!city) return;
-  saveCity({ ...city, x, y }, false);
+  saveCity({ ...city, x, y, px: abs.px, py: abs.py }, false);
 }
 
 function buildGrid() {
@@ -391,13 +583,10 @@ function buildGrid() {
       const x = col - CENTER_X; // cartesian coords with 0,0 center
       const y = row - CENTER_Y;
       const cell = document.createElement('div');
-      cell.className = 'relative select-none border border-slate-800/40 bg-slate-900';
+      cell.className = 'relative select-none';
 
       // Coord label (tiny) Ã¢â‚¬â€ visible when no city occupies the tile
-      const label = document.createElement('div');
-      label.className = 'coord-label absolute bottom-0.5 right-1 text-[10px] text-slate-500';
-      label.textContent = `${x},${y}`;
-      cell.appendChild(label);
+      // no coordinate labels
 
       cell.dataset.x = x;
       cell.dataset.y = y;
@@ -412,114 +601,160 @@ function buildGrid() {
 function render() {
   // Clear prior markers
   const cells = grid.children;
+  if (overlay) overlay.innerHTML = '';
   for (const cell of cells) {
     const marker = cell.querySelector('.city');
     if (marker) marker.remove();
     // dim non-matching search
     const q = searchInput.value.trim().toLowerCase();
     cell.style.filter = q ? 'grayscale(0.35) opacity(0.8)' : '';
-    // show coord label by default; occupied cells will hide it below
-    const coord = cell.querySelector('.coord-label');
-    if (coord) coord.style.display = '';
+    // grid labels are hidden for free map view
   }
 
   const q = searchInput.value.trim().toLowerCase();
   for (const c of cities) {
-    const idx = (c.y + CENTER_Y) * COLS + (c.x + CENTER_X);
-    const cell = cells[idx];
-    if (!cell) continue;
+    // Absolute position: prefer stored px/py, else fallback to tile center
+    const { px: centerX, py: centerY } = cityCenterPx(c);
+    const size = Math.round(CELL_SIZE_PX * 1.5); // 1.5 tiles
 
     const btn = document.createElement('button');
     btn.type = 'button';
     const baseClass = 'city absolute flex items-center justify-center font-semibold truncate rounded-xl shadow ring-1 ring-white/10';
-    const isSelected = c.id === selectedCityId;
     btn.className = baseClass;
     btn.style.backgroundColor = c.color || '#ec4899';
     btn.style.color = c.status === 'reserved' ? '#1e293b' : 'white';
-    btn.textContent = isSelected ? (c.name || `${c.x},${c.y}`) : (c.name?.slice(0, 8) || 'City');
+    btn.textContent = (c.name?.slice(0, 8) || 'City');
     btn.title = `${c.name || 'City'} (Lv ${c.level || '?'})\n${c.status} @ (${c.x}, ${c.y})${c.notes ? `\n${c.notes}` : ''}`;
-    btn.draggable = isAdmin;
+    // Disable native HTML5 drag; we use pixel-based dragging
+    btn.draggable = false;
 
-    // Keep city marker within its tile (no overlap)
-    const basePadding = isSelected ? 0 : 8; // mimic inset-1 (~8px)
-    const size = Math.max(16, Math.round(CELL_SIZE_PX - basePadding));
     btn.style.width = `${size}px`;
     btn.style.height = `${size}px`;
-    btn.style.left = `${Math.round((CELL_SIZE_PX - size) / 2)}px`;
-    btn.style.top = `${Math.round((CELL_SIZE_PX - size) / 2)}px`;
-    // Font size roughly scales with marker
-    btn.style.fontSize = `${Math.max(10, Math.round(size * 0.28))}px`;
+    btn.style.left = `${Math.round(centerX - size / 2)}px`;
+    btn.style.top = `${Math.round(centerY - size / 2)}px`;
+    btn.style.fontSize = `${Math.max(10, Math.round(size * 0.22))}px`;
+    btn.style.zIndex = '10';
+    btn.style.border = '2px solid #000';
 
-    // Click to show info popup with optional actions
+    // Desktop drag support
+    if (isAdmin) {
+      let isMouseDragging = false;
+      const onMouseMove = (e) => {
+        if (!isMouseDragging) return;
+        const { px, py } = eventToOverlayPoint(e);
+        clearTimeout(pressTimer);
+        const overlap = wouldOverlapAtPx(px, py, c.id);
+        // Keep original button in place; show ghost to preview
+        showDragGhost(px, py, Math.round(CELL_SIZE_PX * 1.5), !overlap, c.name ? c.name.slice(0, 8) : '');
+      };
+      const onMouseUp = async (e) => {
+        if (!isMouseDragging) return;
+        isMouseDragging = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        clearDragGhost();
+        const { px, py } = eventToOverlayPoint(e);
+        if (!wouldOverlapAtPx(px, py, c.id)) {
+          const tile = pxToTile(px, py);
+          const occupied = cities.find(x => x.x === tile.x && x.y === tile.y && x.id !== c.id);
+          if (!occupied && (tile.x !== c.x || tile.y !== c.y || c.px !== px || c.py !== py)) {
+            await saveCity({ ...c, x: tile.x, y: tile.y, px, py }, false);
+          }
+        }
+      };
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isMouseDragging = true;
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+    }
+
+    // Click to open info (mobile tap and desktop click)
+    let ignoreNextClick = false;
     btn.addEventListener('click', (e) => {
+      if (ignoreNextClick) { ignoreNextClick = false; return; }
       e.stopPropagation();
       selectedCityId = c.id;
       render();
-      showInfoPopup(c, c.x, c.y);
+      showInfoPopup(c, c.x, c.y, { px: c.px ?? null, py: c.py ?? null });
     });
 
     // long press -> toggle reserved/occupied (admin only)
     let pressTimer;
     if (isAdmin) {
-      btn.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData(CITY_DRAG_TYPE, c.id);
-        e.dataTransfer.effectAllowed = 'move';
-      });
-      // Touch drag to move city (long press opens info instead of toggling)
+      // Disable legacy HTML5 dragstart
+      // Touch: long-press to enable drag, tap to open info
       btn.addEventListener('touchstart', (e) => {
         clearTimeout(pressTimer);
         const t = e.touches[0];
-        touchDrag = { id: c.id, start: { x: t.clientX, y: t.clientY }, last: { x: t.clientX, y: t.clientY } };
-        pressTimer = setTimeout(() => {
-          if (touchDrag && Math.hypot(touchDrag.last.x - touchDrag.start.x, touchDrag.last.y - touchDrag.start.y) < 8) {
-            // Open info popup on long-press (safer on mobile than toggling/deleting)
-            showInfoPopup(c, c.x, c.y);
-          }
-        }, LONG_PRESS_MS);
-      }, { passive: true });
+        touchDrag = { id: c.id, start: { x: t.clientX, y: t.clientY }, last: { x: t.clientX, y: t.clientY }, dragging: false, moved: false };
+        pressTimer = setTimeout(() => { if (touchDrag) { touchDrag.dragging = true; lockMapScroll(true); } }, LONG_PRESS_MS);
+      }, { passive: false });
       btn.addEventListener('touchmove', (e) => {
         if (!touchDrag) return;
         const t = e.touches[0];
         touchDrag.last = { x: t.clientX, y: t.clientY };
-        clearTimeout(pressTimer); // moving cancels toggle
-        const target = pointToCell({ x: t.clientX, y: t.clientY }, grid, COLS, ROWS);
-        const occupied = cities.find(x => x.x === target.x && x.y === target.y && x.id !== touchDrag.id);
-        setDragPreview(target, !occupied);
-      }, { passive: true });
-      btn.addEventListener('touchend', async () => {
+        // If long-press not reached yet, ignore movement (prevents accidental drags)
+        if (!touchDrag.dragging) return;
+        e.preventDefault(); // block map scroll while dragging
+        const { px, py } = eventToOverlayPoint(e);
+        const overlap = wouldOverlapAtPx(px, py, touchDrag.id);
+        touchDrag.moved = true;
+        showDragGhost(px, py, Math.round(CELL_SIZE_PX * 1.5), !overlap, c.name ? c.name.slice(0, 8) : '');
+      }, { passive: false });
+      btn.addEventListener('touchend', async (e) => {
         clearTimeout(pressTimer);
         if (!touchDrag) return;
-        const target = pointToCell(touchDrag.last, grid, COLS, ROWS);
         const city = cities.find(x => x.id === touchDrag.id);
-        const occupied = cities.find(x => x.x === target.x && x.y === target.y && x.id !== touchDrag.id);
+        const rect = grid.getBoundingClientRect();
+        const scale = Number(zoom.value) / 100;
+        const absPx = Math.round((touchDrag.last.x - rect.left) / scale);
+        const absPy = Math.round((touchDrag.last.y - rect.top) / scale);
+        const overlap = wouldOverlapAtPx(absPx, absPy, touchDrag.id);
         clearDragPreview();
-        if (city && !occupied && (city.x !== target.x || city.y !== target.y)) {
-          await saveCity({ ...city, x: target.x, y: target.y }, false);
+        clearDragGhost();
+        if (touchDrag.dragging && touchDrag.moved) {
+          if (city && !overlap && (city.px !== absPx || city.py !== absPy)) {
+            const tile = pxToTile(absPx, absPy);
+            await saveCity({ ...city, x: tile.x, y: tile.y, px: absPx, py: absPy }, false);
+          }
+          // Suppress the synthetic click that follows touchend
+          ignoreNextClick = true;
+        } else {
+          // Treat as tap -> open info
+          selectedCityId = c.id;
+          render();
+          showInfoPopup(c, c.x, c.y, { px: c.px ?? null, py: c.py ?? null });
+          ignoreNextClick = true;
         }
+        lockMapScroll(false);
         touchDrag = null;
       });
-      btn.addEventListener('touchcancel', () => { clearTimeout(pressTimer); clearDragPreview(); touchDrag = null; });
+      btn.addEventListener('touchcancel', () => { clearTimeout(pressTimer); clearDragPreview(); lockMapScroll(false); touchDrag = null; });
       // Desktop long-press: open info instead of toggling to avoid accidental actions
       btn.addEventListener('mousedown', () => { pressTimer = setTimeout(() => showInfoPopup(c, c.x, c.y), LONG_PRESS_MS); });
       btn.addEventListener('mouseup', () => clearTimeout(pressTimer));
       btn.addEventListener('mouseleave', () => clearTimeout(pressTimer));
     }
 
-    cell.appendChild(btn);
-    // hide coord label on occupied tile
-    const coord2 = cell.querySelector('.coord-label');
-    if (coord2) coord2.style.display = 'none';
+    if (overlay) {
+      overlay.appendChild(btn);
+    }
+
+    // Prevent long-press context menu on mobile
+    btn.addEventListener('contextmenu', (e) => e.preventDefault());
 
     // Highlight matches
     if (q && c.name.toLowerCase().includes(q)) {
-      cell.style.filter = 'none';
       btn.classList.add('highlight-match');
     }
   }
 }
 
 // ===== Modal helpers =====
-function openCreateAt(x, y) {
+let formPxPy = null; // {px,py} retained while editing/creating
+function openCreateAt(x, y, px = null, py = null) {
   modalTitle.textContent = 'Add City';
   idEl.value = '';
   nameEl.value = '';
@@ -527,6 +762,7 @@ function openCreateAt(x, y) {
   statusEl.value = 'occupied';
   xEl.value = x;
   yEl.value = y;
+  formPxPy = (px != null && py != null) ? { px, py } : null;
   notesEl.value = '';
   colorEl.value = levelColors[levelEl.value] || '#ec4899';
   deleteBtn.classList.add('hidden');
@@ -541,6 +777,7 @@ function openEdit(c) {
   statusEl.value = c.status;
   xEl.value = c.x;
   yEl.value = c.y;
+  formPxPy = (c.px != null && c.py != null) ? { px: c.px, py: c.py } : null;
   notesEl.value = c.notes || '';
   colorEl.value = levelColors[c.level] || '#ec4899';
   deleteBtn.classList.remove('hidden');
@@ -560,9 +797,17 @@ cityForm.addEventListener('submit', async (e) => {
     status: statusEl.value,
     x: Number(xEl.value),
     y: Number(yEl.value),
+    px: formPxPy?.px ?? undefined,
+    py: formPxPy?.py ?? undefined,
     notes: notesEl.value.trim() || undefined,
     color: colorEl.value
   };
+
+  // Prevent overlapping placements (pixel-based)
+  if (payload.px != null && payload.py != null && wouldOverlapAtPx(payload.px, payload.py, isNew ? null : payload.id)) {
+    alert('Placement would overlap another city');
+    return;
+  }
 
   const success = await saveCity(payload, isNew);
   if (success) {
@@ -634,7 +879,7 @@ autoInsertBtn.addEventListener('click', async () => {
 });
 
 // Show info popup for a cell or city
-function showInfoPopup(city, x, y) {
+function showInfoPopup(city, x, y, abs = null) {
   infoContent.innerHTML = '';
   infoAddCityBtn.classList.add('hidden');
   infoAddBearBtn.classList.add('hidden');
@@ -673,7 +918,11 @@ function showInfoPopup(city, x, y) {
 
       infoAddCityBtn.onclick = () => {
         infoPopup.close();
-        openCreateAt(x, y);
+        if (abs) {
+          openCreateAt(x, y, abs.px, abs.py);
+        } else {
+          openCreateAt(x, y);
+        }
       };
 
       infoAddBearBtn.onclick = () => {
