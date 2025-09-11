@@ -1,6 +1,6 @@
 // ===== Model =====
-const BEAR_TRAP_SIZE = 2;
-const BEAR_TRAP_COUNT = 2;
+let BEAR_TRAP_SIZE = 2; // configurable via UI
+const BEAR_TRAP_COUNT = 3;
 const CITY_DRAG_TYPE = 'application/x-city-id';
 const LONG_PRESS_MS = 700;
 let bearTraps = Array(BEAR_TRAP_COUNT).fill(null);
@@ -9,10 +9,14 @@ let snapshotEtag = null;
 /** @type {Array<{id:string,name:string,level?:number,status:'occupied'|'reserved',x:number,y:number,notes?:string,color:string}>} */
 let cities = [];
 let levelColors = {};
+let CELL_SIZE_PX = 28; // px per tile, tuned to match game spacing
+let CITY_SCALE = 1.0;  // keep marker inside its tile
 
 // Admin functionality
 let isAdmin = false;
 let currentUser = 'viewer';
+let selectedCityId = null;
+let touchDrag = null; // { id, start, last }
 
 async function checkAdminStatus() {
   const user = await Auth.fetchUser();
@@ -87,6 +91,9 @@ const cancelAdminLogin = document.getElementById('cancelAdminLogin');
 const searchInput = document.getElementById('search');
 
 const zoom = document.getElementById('zoom');
+const tileSizeRange = document.getElementById('tileSize');
+const cityScaleRange = document.getElementById('cityScale');
+const trapSizeSelect = document.getElementById('trapSize');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
 const exitFullscreenBtn = document.getElementById('exitFullscreenBtn');
 const trapModal = document.getElementById('trapModal');
@@ -222,6 +229,17 @@ function getBearTrapCells(topLeft) {
   return cells;
 }
 
+function updateGridDimensions() {
+  // Sync grid template sizes with current CELL_SIZE_PX
+  grid.style.gridTemplateColumns = `repeat(var(--cells), ${CELL_SIZE_PX}px)`;
+  grid.style.gridAutoRows = `${CELL_SIZE_PX}px`;
+}
+
+function updateTrapLegend() {
+  const legend = document.getElementById('trapLegend');
+  if (legend) legend.textContent = `Bear Trap (${BEAR_TRAP_SIZE}x${BEAR_TRAP_SIZE})`;
+}
+
 function hexToRgba(hex, alpha) {
   const num = parseInt(hex.replace('#', ''), 16);
   const r = (num >> 16) & 255;
@@ -231,21 +249,45 @@ function hexToRgba(hex, alpha) {
 }
 
 function highlightBearTraps() {
-  grid.querySelectorAll('.bear-trap-area').forEach(c => {
-    c.classList.remove('bear-trap-area');
-    c.style.backgroundColor = '';
-    c.style.boxShadow = '';
+  // Clear any previous trap backgrounds/overlays on ALL cells
+  Array.from(grid.children).forEach((cell) => {
+    cell.style.removeProperty('background-color');
+    cell.style.boxShadow = '';
   });
-  for (const trap of bearTraps) {
+  grid.querySelectorAll('.trap-overlay').forEach(el => el.remove());
+
+  for (let i = 0; i < bearTraps.length; i++) {
+    const trap = bearTraps[i];
     if (!trap) continue;
-    const fill = hexToRgba(trap.color || '#f59e0b', 0.2);
-    const border = hexToRgba(trap.color || '#f59e0b', 0.45);
-    for (const { x, y } of getBearTrapCells(trap)) {
+    const fill = trap.color || '#f59e0b';
+    const cells = getBearTrapCells(trap);
+
+    for (const { x, y } of cells) {
       const cell = grid.querySelector(`[data-x="${x}"][data-y="${y}"]`);
-      if (cell) {
-        cell.classList.add('bear-trap-area');
-        cell.style.backgroundColor = fill;
-        cell.style.boxShadow = `inset 0 0 0 2px ${border}`;
+      if (!cell) continue;
+      // Set solid background color for each trap cell (override light theme)
+      cell.style.setProperty('background-color', fill, 'important');
+    }
+
+    // Add a small badge on the top-left tile indicating T1/T2/T3
+    const topLeft = cells[0];
+    if (topLeft) {
+      const topCell = grid.querySelector(`[data-x="${topLeft.x}"][data-y="${topLeft.y}"]`);
+      if (topCell) {
+        const badge = document.createElement('div');
+        badge.className = 'trap-overlay absolute text-[10px] font-bold px-1 py-0.5 rounded';
+        badge.textContent = `T${i + 1}`;
+        badge.style.top = '2px';
+        badge.style.left = '2px';
+        badge.style.pointerEvents = 'none';
+        // Choose contrasting text color
+        const hex = fill.replace('#','');
+        const num = parseInt(hex,16);
+        const r = (num>>16)&255, g=(num>>8)&255, b=num&255;
+        const luminance = 0.2126*r + 0.7152*g + 0.0722*b;
+        badge.style.color = luminance > 140 ? '#111827' : '#ffffff';
+        badge.style.backgroundColor = luminance > 140 ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)';
+        topCell.appendChild(badge);
       }
     }
   }
@@ -342,6 +384,7 @@ function handleGridDrop(e) {
 function buildGrid() {
   grid.style.setProperty('--cells', COLS);
   grid.innerHTML = '';
+  updateGridDimensions();
 
   for (let row = 0; row < ROWS; row++) {
     for (let col = 0; col < COLS; col++) {
@@ -350,9 +393,9 @@ function buildGrid() {
       const cell = document.createElement('div');
       cell.className = 'relative select-none border border-slate-800/40 bg-slate-900';
 
-      // Coord label (tiny)
+      // Coord label (tiny) Ã¢â‚¬â€ visible when no city occupies the tile
       const label = document.createElement('div');
-      label.className = 'absolute bottom-0.5 right-1 text-[10px] text-slate-500';
+      label.className = 'coord-label absolute bottom-0.5 right-1 text-[10px] text-slate-500';
       label.textContent = `${x},${y}`;
       cell.appendChild(label);
 
@@ -375,6 +418,9 @@ function render() {
     // dim non-matching search
     const q = searchInput.value.trim().toLowerCase();
     cell.style.filter = q ? 'grayscale(0.35) opacity(0.8)' : '';
+    // show coord label by default; occupied cells will hide it below
+    const coord = cell.querySelector('.coord-label');
+    if (coord) coord.style.display = '';
   }
 
   const q = searchInput.value.trim().toLowerCase();
@@ -385,16 +431,30 @@ function render() {
 
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'city absolute inset-1 rounded-xl shadow ring-1 ring-white/10 flex items-center justify-center text-[11px] font-semibold truncate';
+    const baseClass = 'city absolute flex items-center justify-center font-semibold truncate rounded-xl shadow ring-1 ring-white/10';
+    const isSelected = c.id === selectedCityId;
+    btn.className = baseClass;
     btn.style.backgroundColor = c.color || '#ec4899';
     btn.style.color = c.status === 'reserved' ? '#1e293b' : 'white';
-    btn.textContent = c.name?.slice(0, 8) || 'City';
+    btn.textContent = isSelected ? (c.name || `${c.x},${c.y}`) : (c.name?.slice(0, 8) || 'City');
     btn.title = `${c.name || 'City'} (Lv ${c.level || '?'})\n${c.status} @ (${c.x}, ${c.y})${c.notes ? `\n${c.notes}` : ''}`;
     btn.draggable = isAdmin;
+
+    // Keep city marker within its tile (no overlap)
+    const basePadding = isSelected ? 0 : 8; // mimic inset-1 (~8px)
+    const size = Math.max(16, Math.round(CELL_SIZE_PX - basePadding));
+    btn.style.width = `${size}px`;
+    btn.style.height = `${size}px`;
+    btn.style.left = `${Math.round((CELL_SIZE_PX - size) / 2)}px`;
+    btn.style.top = `${Math.round((CELL_SIZE_PX - size) / 2)}px`;
+    // Font size roughly scales with marker
+    btn.style.fontSize = `${Math.max(10, Math.round(size * 0.28))}px`;
 
     // Click to show info popup with optional actions
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      selectedCityId = c.id;
+      render();
       showInfoPopup(c, c.x, c.y);
     });
 
@@ -405,16 +465,50 @@ function render() {
         e.dataTransfer.setData(CITY_DRAG_TYPE, c.id);
         e.dataTransfer.effectAllowed = 'move';
       });
+      // Touch drag to move city (long press opens info instead of toggling)
       btn.addEventListener('touchstart', (e) => {
-        pressTimer = setTimeout(() => { toggleStatus(c.id); }, LONG_PRESS_MS);
+        clearTimeout(pressTimer);
+        const t = e.touches[0];
+        touchDrag = { id: c.id, start: { x: t.clientX, y: t.clientY }, last: { x: t.clientX, y: t.clientY } };
+        pressTimer = setTimeout(() => {
+          if (touchDrag && Math.hypot(touchDrag.last.x - touchDrag.start.x, touchDrag.last.y - touchDrag.start.y) < 8) {
+            // Open info popup on long-press (safer on mobile than toggling/deleting)
+            showInfoPopup(c, c.x, c.y);
+          }
+        }, LONG_PRESS_MS);
+      }, { passive: true });
+      btn.addEventListener('touchmove', (e) => {
+        if (!touchDrag) return;
+        const t = e.touches[0];
+        touchDrag.last = { x: t.clientX, y: t.clientY };
+        clearTimeout(pressTimer); // moving cancels toggle
+        const target = pointToCell({ x: t.clientX, y: t.clientY }, grid, COLS, ROWS);
+        const occupied = cities.find(x => x.x === target.x && x.y === target.y && x.id !== touchDrag.id);
+        setDragPreview(target, !occupied);
+      }, { passive: true });
+      btn.addEventListener('touchend', async () => {
+        clearTimeout(pressTimer);
+        if (!touchDrag) return;
+        const target = pointToCell(touchDrag.last, grid, COLS, ROWS);
+        const city = cities.find(x => x.id === touchDrag.id);
+        const occupied = cities.find(x => x.x === target.x && x.y === target.y && x.id !== touchDrag.id);
+        clearDragPreview();
+        if (city && !occupied && (city.x !== target.x || city.y !== target.y)) {
+          await saveCity({ ...city, x: target.x, y: target.y }, false);
+        }
+        touchDrag = null;
       });
-      btn.addEventListener('touchend', () => clearTimeout(pressTimer));
-      btn.addEventListener('mousedown', () => { pressTimer = setTimeout(() => toggleStatus(c.id), LONG_PRESS_MS); });
+      btn.addEventListener('touchcancel', () => { clearTimeout(pressTimer); clearDragPreview(); touchDrag = null; });
+      // Desktop long-press: open info instead of toggling to avoid accidental actions
+      btn.addEventListener('mousedown', () => { pressTimer = setTimeout(() => showInfoPopup(c, c.x, c.y), LONG_PRESS_MS); });
       btn.addEventListener('mouseup', () => clearTimeout(pressTimer));
       btn.addEventListener('mouseleave', () => clearTimeout(pressTimer));
     }
 
     cell.appendChild(btn);
+    // hide coord label on occupied tile
+    const coord2 = cell.querySelector('.coord-label');
+    if (coord2) coord2.style.display = 'none';
 
     // Highlight matches
     if (q && c.name.toLowerCase().includes(q)) {
@@ -592,6 +686,28 @@ function showInfoPopup(city, x, y) {
   infoPopup.showModal();
 }
 
+// Drag preview helpers
+let lastPreviewCell = null;
+function setDragPreview(cellPos, ok) {
+  const cell = grid.querySelector(`[data-x="${cellPos.x}"][data-y="${cellPos.y}"]`);
+  if (lastPreviewCell && lastPreviewCell !== cell) {
+    lastPreviewCell.style.outline = '';
+    lastPreviewCell.style.outlineOffset = '';
+  }
+  if (cell) {
+    cell.style.outline = `3px solid ${ok ? '#22d3ee' : '#ef4444'}`;
+    cell.style.outlineOffset = '-3px';
+    lastPreviewCell = cell;
+  }
+}
+function clearDragPreview() {
+  if (lastPreviewCell) {
+    lastPreviewCell.style.outline = '';
+    lastPreviewCell.style.outlineOffset = '';
+    lastPreviewCell = null;
+  }
+}
+
 infoCloseBtn.addEventListener('click', () => infoPopup.close());
 
 clearAllBtn.addEventListener('click', async () => {
@@ -640,6 +756,36 @@ zoom.addEventListener('input', () => {
   gridWrapper.style.transform = `scale(${scale})`;
 });
 
+// Tile size control
+if (tileSizeRange) {
+  tileSizeRange.value = String(CELL_SIZE_PX);
+  tileSizeRange.addEventListener('input', () => {
+    CELL_SIZE_PX = Number(tileSizeRange.value) || 42;
+    updateGridDimensions();
+    render();
+    requestAnimationFrame(centerView);
+  });
+}
+
+// City scale control
+if (cityScaleRange) {
+  cityScaleRange.value = String(CITY_SCALE);
+  cityScaleRange.addEventListener('input', () => {
+    CITY_SCALE = Number(cityScaleRange.value) || 1.0;
+    render();
+  });
+}
+
+// Bear trap size control
+if (trapSizeSelect) {
+  trapSizeSelect.value = String(BEAR_TRAP_SIZE);
+  trapSizeSelect.addEventListener('change', () => {
+    BEAR_TRAP_SIZE = Number(trapSizeSelect.value) || 2;
+    updateTrapLegend();
+    highlightBearTraps();
+  });
+}
+
 closeTrapModal.addEventListener('click', () => {
   pendingPlacement = null;
   trapModal.close();
@@ -682,7 +828,7 @@ deleteTrapBtn.addEventListener('click', async () => {
 
 // Center view on the grid at start
 function centerView() {
-  const cellSize = 42 * (Number(zoom.value) / 100);
+  const cellSize = CELL_SIZE_PX * (Number(zoom.value) / 100);
   const contentSize = COLS * cellSize;
   scroller.scrollLeft = (contentSize - scroller.clientWidth) / 2;
   scroller.scrollTop = (contentSize - scroller.clientHeight) / 2;
@@ -762,8 +908,10 @@ loadLevelColors();
 loadSnapshot();
 setInterval(() => loadSnapshot(), 5000);
 requestAnimationFrame(centerView);
+updateTrapLegend();
 
 // Run tests if URL has #test
 if (location.hash.slice(1) === 'test') {
   runTests();
 }
+
