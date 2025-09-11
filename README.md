@@ -252,3 +252,10 @@ MIT License - see LICENSE file for details
 ## Support
 
 For issues and questions, please create an issue in the repository.
+
+### Build CSS
+The app now bundles Tailwind locally. CSS builds automatically on install via postinstall. To build manually:
+```bash
+npm run build:css
+```
+pm run build:css.

@@ -1,6 +1,7 @@
 const path = require('path');
 const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const DB_EXTENSION = '.db';
 const DEFAULT_DB_NAME = `wos${DB_EXTENSION}`;
@@ -8,7 +9,12 @@ const BCRYPT_ROUNDS = 10;
 const DEFAULT_ADMIN = {
   id: 'admin',
   username: 'admin',
-  password: 'admin',
+  // In production, if ADMIN_PASSWORD not provided, generate a strong one on first run.
+  password:
+    process.env.ADMIN_PASSWORD ||
+    (process.env.NODE_ENV === 'production'
+      ? crypto.randomBytes(12).toString('base64url')
+      : 'admin'),
   role: 'admin',
 };
 
@@ -31,14 +37,25 @@ const ACTIONS = {
   DELETE: 'delete',
 };
 
-const db = new Database(DB_PATH);
+const createSingleton = process.env.DB_SINGLETON !== 'false';
+const db = createSingleton ? new Database(DB_PATH) : null;
 
-const runQuery = (sql, params = []) => db.prepare(sql).run(...params);
-const getQuery = (sql, params = []) => db.prepare(sql).get(...params);
-const allQuery = (sql, params = []) => db.prepare(sql).all(...params);
+function withDb(fn) {
+  if (db) return fn(db);
+  const temp = new Database(DB_PATH);
+  try {
+    return fn(temp);
+  } finally {
+    try { temp.close(); } catch (_) {}
+  }
+}
+
+const runQuery = (sql, params = []) => withDb((d) => d.prepare(sql).run(...params));
+const getQuery = (sql, params = []) => withDb((d) => d.prepare(sql).get(...params));
+const allQuery = (sql, params = []) => withDb((d) => d.prepare(sql).all(...params));
 
 function initializeDatabase() {
-  db.exec(`
+  withDb((d) => d.exec(`
     CREATE TABLE IF NOT EXISTS ${TABLES.CITIES} (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -46,12 +63,14 @@ function initializeDatabase() {
       status TEXT NOT NULL DEFAULT 'occupied',
       x INTEGER NOT NULL,
       y INTEGER NOT NULL,
+      px INTEGER, -- absolute pixel X (optional)
+      py INTEGER, -- absolute pixel Y (optional)
       notes TEXT,
       color TEXT DEFAULT '#ec4899'
     );
     CREATE TABLE IF NOT EXISTS ${TABLES.TRAPS} (
       id TEXT PRIMARY KEY,
-      slot INTEGER UNIQUE CHECK(slot IN (1,2)),
+      slot INTEGER UNIQUE CHECK(slot IN (1,2,3)),
       x INTEGER NOT NULL,
       y INTEGER NOT NULL,
       color TEXT NOT NULL DEFAULT '#f59e0b',
@@ -66,11 +85,17 @@ function initializeDatabase() {
       entity TEXT NOT NULL,
       action TEXT NOT NULL,
       entity_id TEXT,
+      user TEXT,
+      details TEXT,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-  `);
+  `));
 
   ensureUsersTable();
+  ensureAuditTable();
+  ensureTrapsTable();
+  ensureAuditTable();
+  ensureCitiesAbsoluteColumns();
 
   // Seed default level colors (1-5)
   const defaultLevelColors = {
@@ -102,6 +127,12 @@ function initializeDatabase() {
         DEFAULT_ADMIN.role,
       ]
     );
+    if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `Admin user created. Set ADMIN_PASSWORD env. Temporary password: ${DEFAULT_ADMIN.password}`
+      );
+    }
   } else if (!admin[USER_PASSWORD_COLUMN]) {
     runQuery(
       `UPDATE ${TABLES.USERS} SET ${USER_PASSWORD_COLUMN} = ? WHERE username = ?`,
@@ -114,19 +145,17 @@ function initializeDatabase() {
 }
 
 function ensureUsersTable() {
-  const tableInfo = db
-    .prepare(`PRAGMA table_info(${TABLES.USERS})`)
-    .all();
+  const tableInfo = allQuery(`PRAGMA table_info(${TABLES.USERS})`);
 
   if (tableInfo.length === 0) {
-    db.exec(`
+    withDb((d) => d.exec(`
       CREATE TABLE ${TABLES.USERS} (
         id TEXT PRIMARY KEY,
         username TEXT NOT NULL,
         ${USER_PASSWORD_COLUMN} TEXT NOT NULL,
         role TEXT NOT NULL
       );
-    `);
+    `));
     return;
   }
 
@@ -134,9 +163,61 @@ function ensureUsersTable() {
     (column) => column.name === USER_PASSWORD_COLUMN
   );
   if (!hasPassword) {
-    db.exec(
-      `ALTER TABLE ${TABLES.USERS} ADD COLUMN ${USER_PASSWORD_COLUMN} TEXT NOT NULL DEFAULT ''`
+    withDb((d) =>
+      d.exec(
+        `ALTER TABLE ${TABLES.USERS} ADD COLUMN ${USER_PASSWORD_COLUMN} TEXT NOT NULL DEFAULT ''`
+      )
     );
+  }
+}
+
+function ensureTrapsTable() {
+  const row = getQuery(`SELECT sql FROM sqlite_master WHERE type='table' AND name='${TABLES.TRAPS}'`);
+  const createSql = row && row.sql ? String(row.sql) : '';
+  if (createSql.includes('CHECK(slot IN (1,2))')) {
+    // Migrate to allow slot 1,2,3
+    withDb((d) => {
+      const migrate = `
+        PRAGMA foreign_keys=off;
+        BEGIN TRANSACTION;
+        CREATE TABLE ${TABLES.TRAPS}_new (
+          id TEXT PRIMARY KEY,
+          slot INTEGER UNIQUE CHECK(slot IN (1,2,3)),
+          x INTEGER NOT NULL,
+          y INTEGER NOT NULL,
+          color TEXT NOT NULL DEFAULT '#f59e0b',
+          notes TEXT
+        );
+        INSERT INTO ${TABLES.TRAPS}_new (id, slot, x, y, color, notes)
+          SELECT id, slot, x, y, color, notes FROM ${TABLES.TRAPS};
+        DROP TABLE ${TABLES.TRAPS};
+        ALTER TABLE ${TABLES.TRAPS}_new RENAME TO ${TABLES.TRAPS};
+        COMMIT;
+        PRAGMA foreign_keys=on;
+      `;
+      d.exec(migrate);
+    });
+  }
+}
+
+function ensureCitiesAbsoluteColumns() {
+  const cols = allQuery(`PRAGMA table_info(${TABLES.CITIES})`).map((c) => c.name);
+  if (!cols.includes('px')) {
+    withDb((d) => d.exec(`ALTER TABLE ${TABLES.CITIES} ADD COLUMN px INTEGER`));
+  }
+  if (!cols.includes('py')) {
+    withDb((d) => d.exec(`ALTER TABLE ${TABLES.CITIES} ADD COLUMN py INTEGER`));
+  }
+}
+
+function ensureAuditTable() {
+  const tableInfo = allQuery(`PRAGMA table_info(${TABLES.AUDIT})`);
+  const colNames = tableInfo.map((c) => c.name);
+  if (!colNames.includes('user')) {
+    withDb((d) => d.exec(`ALTER TABLE ${TABLES.AUDIT} ADD COLUMN user TEXT`));
+  }
+  if (!colNames.includes('details')) {
+    withDb((d) => d.exec(`ALTER TABLE ${TABLES.AUDIT} ADD COLUMN details TEXT`));
   }
 }
 
@@ -147,10 +228,11 @@ function clearDatabase() {
   runQuery(`DELETE FROM ${TABLES.AUDIT}`);
 }
 
-function logAudit(entity, action, entityId) {
+function logAudit(entity, action, entityId, meta = {}) {
+  const { user = '', details = '' } = meta;
   runQuery(
-    `INSERT INTO ${TABLES.AUDIT} (entity, action, entity_id) VALUES (?, ?, ?)`,
-    [entity, action, entityId]
+    `INSERT INTO ${TABLES.AUDIT} (entity, action, entity_id, user, details) VALUES (?, ?, ?, ?, ?)`,
+    [entity, action, entityId, user, details]
   );
 }
 
@@ -164,4 +246,6 @@ module.exports = {
   initializeDatabase,
   clearDatabase,
   db,
+  withDb,
+  ensureCitiesAbsoluteColumns,
 };

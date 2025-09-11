@@ -4,8 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Whiteout Spot Organizer - List</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/tailwind.css">
+  <link rel="stylesheet" href="css/tw.css">
   <style>
     html, body { height: 100%; overscroll-behavior: none; }
     input[type=number]::-webkit-outer-spin-button,
@@ -181,11 +180,11 @@
        <div class="p-4 space-y-4">
          <div>
            <label class="text-xs text-slate-300">Username</label>
-           <input id="adminUsername" type="text" required class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="admin" />
+           <input id="adminUsername" type="text" autocomplete="username" required class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="admin" />
          </div>
          <div>
            <label class="text-xs text-slate-300">Password</label>
-           <input id="adminPassword" type="password" required class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="Enter password" />
+           <input id="adminPassword" type="password" autocomplete="current-password" required class="mt-1 w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2" placeholder="Enter password" />
          </div>
        </div>
        <div class="p-4 border-t border-slate-700 flex justify-end gap-2">

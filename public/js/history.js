@@ -8,59 +8,43 @@ const itemsPerPage = 10;
 let isAdmin = false;
 let currentUser = 'viewer';
 
-// Mock history data
-const mockHistoryData = [
-  {
-    id: 1,
-    timestamp: new Date('2024-01-15T10:30:00'),
-    action: 'create',
-    cityName: 'TestCity1',
-    cityId: 'city-1',
-    user: 'admin',
-    details: 'Created new city at position (5, 3)',
-    coordinates: { x: 5, y: 3 }
-  },
-  {
-    id: 2,
-    timestamp: new Date('2024-01-15T11:15:00'),
-    action: 'update',
-    cityName: 'TestCity1',
-    cityId: 'city-1',
-    user: 'admin',
-    details: 'Updated level from 10 to 15',
-    coordinates: { x: 5, y: 3 }
-  },
-  {
-    id: 3,
-    timestamp: new Date('2024-01-15T14:20:00'),
-    action: 'create',
-    cityName: 'TestCity2',
-    cityId: 'city-2',
-    user: 'user1',
-    details: 'Created new city at position (-2, 1)',
-    coordinates: { x: -2, y: 1 }
-  },
-  {
-    id: 4,
-    timestamp: new Date('2024-01-16T09:45:00'),
-    action: 'delete',
-    cityName: 'TestCity1',
-    cityId: 'city-1',
-    user: 'admin',
-    details: 'Deleted city from position (5, 3)',
-    coordinates: { x: 5, y: 3 }
-  },
-  {
-    id: 5,
-    timestamp: new Date('2024-01-16T16:30:00'),
-    action: 'update',
-    cityName: 'TestCity2',
-    cityId: 'city-2',
-    user: 'user1',
-    details: 'Changed status from occupied to reserved',
-    coordinates: { x: -2, y: 1 }
+// Build history data from server API when available
+async function loadAuditFromServer() {
+  try {
+    const res = await fetch('/api/audit');
+    if (!res.ok) throw new Error('Auth required');
+    const rows = await res.json();
+    // rows: { id, entity, action, entity_id, user, details, timestamp }
+    return rows.map(r => {
+      let subject = r.entity;
+      let coords = '';
+      // Try to parse details we emit like:
+      // "admin city update (15, 13) change name NAME"
+      const m = /^([^\s]+)\s+(city|trap|user)\s+(create|update|deleted)\s+\(([^)]+)\)\s*(.*)$/i.exec(r.details || '');
+      if (m) {
+        coords = m[4];
+        const trailing = (m[5] || '').trim();
+        if (trailing) {
+          subject = `${trailing} (${coords})`;
+        } else if (coords) {
+          subject = `${m[2]} (${coords})`;
+        }
+      }
+      return {
+        id: r.id,
+        timestamp: new Date(r.timestamp),
+        action: r.action,
+        cityName: subject,
+        cityId: r.entity_id,
+        user: r.user || '',
+        details: r.details || `${r.entity} ${r.action} ${r.entity_id || ''}`.trim(),
+        coordinates: { x: '', y: '' }
+      };
+    });
+  } catch (e) {
+    return [];
   }
-];
+}
 
 // ===== Elements =====
 const userMode = document.getElementById('userMode');
@@ -119,9 +103,14 @@ function updateMenuUI() {
 }
 
 // ===== History Functions =====
-function loadHistoryData() {
-  // In a real app, this would fetch from the server
-  historyData = [...mockHistoryData];
+async function loadHistoryData() {
+  const serverData = await loadAuditFromServer();
+  if (serverData.length > 0) {
+    historyData = serverData;
+  } else {
+    // If not logged in or no server data, show hint row
+    historyData = [];
+  }
   filterHistory();
   renderHistory();
   updatePagination();
@@ -175,7 +164,7 @@ function renderHistory() {
     historyTableBody.innerHTML = `
       <tr>
         <td colspan="5" class="px-4 py-8 text-center text-slate-400">
-          No history entries found
+          ${isAdmin ? 'No history entries found' : 'Login to view edit history'}
         </td>
       </tr>
     `;
@@ -202,7 +191,7 @@ function renderHistory() {
         </span>
       </td>
       <td class="px-4 py-3 text-sm text-slate-300">
-        ${entry.cityName} (${entry.coordinates.x}, ${entry.coordinates.y})
+        ${entry.cityName}
       </td>
       <td class="px-4 py-3 text-sm text-slate-300">
         ${entry.user}
@@ -327,3 +316,4 @@ adminLoginForm.addEventListener('submit', async (e) => {
 // ===== Boot =====
 checkAdminStatus();
 loadHistoryData();
+

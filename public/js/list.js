@@ -1,6 +1,6 @@
 // ===== Model =====
 const BEAR_TRAP_SIZE = 2;
-const BEAR_TRAP_COUNT = 2;
+const BEAR_TRAP_COUNT = 3;
 let bearTraps = Array(BEAR_TRAP_COUNT).fill(null);
 let snapshotEtag = null;
 
@@ -245,24 +245,23 @@ function buildGrid() {
 }
 
 function highlightBearTraps() {
-  grid.querySelectorAll('.bear-trap-area').forEach(c => {
-    c.classList.remove('bear-trap-area');
-    c.style.backgroundColor = '';
-    c.style.boxShadow = '';
+  // Clear any previous trap backgrounds/overlays on ALL cells
+  Array.from(grid.children).forEach((cell) => {
+    cell.style.removeProperty('background-color');
+    cell.style.boxShadow = '';
   });
+  grid.querySelectorAll('.trap-overlay').forEach(el => el.remove());
   for (const trap of bearTraps) {
     if (!trap) continue;
-    const fill = hexToRgba(trap.color || '#f59e0b', 0.2);
-    const border = hexToRgba(trap.color || '#f59e0b', 0.45);
+    const fill = trap.color || '#f59e0b';
     for (let dx = 0; dx < BEAR_TRAP_SIZE; dx++) {
       for (let dy = 0; dy < BEAR_TRAP_SIZE; dy++) {
         const x = trap.x + dx;
         const y = trap.y + dy;
         const cell = grid.querySelector(`[data-x="${x}"][data-y="${y}"]`);
         if (cell) {
-          cell.classList.add('bear-trap-area');
-          cell.style.backgroundColor = fill;
-          cell.style.boxShadow = `inset 0 0 0 2px ${border}`;
+          // set solid background for trap coverage (override light theme)
+          cell.style.setProperty('background-color', fill, 'important')
         }
       }
     }
@@ -326,12 +325,12 @@ function renderList() {
         <div class="flex-1 min-w-0">
           <div class="font-medium text-sm truncate">${city.name}</div>
           <div class="text-xs text-slate-400">
-            Lv ${city.level || '?'} • ${city.status} • (${city.x}, ${city.y})
+            Lv ${city.level || '?'} â€¢ ${city.status} â€¢ (${city.x}, ${city.y})
           </div>
           ${city.notes ? `<div class="text-xs text-slate-500 mt-1">${city.notes}</div>` : ''}
         </div>
         <div class="text-xs text-slate-500">
-          ${city.status === 'occupied' ? '🔴' : '🟡'}
+          ${city.status === 'occupied' ? 'ðŸ”´' : 'ðŸŸ¡'}
         </div>
       </div>
     `;
@@ -357,18 +356,33 @@ function highlightCityOnMap(city) {
   const cells = grid.children;
   const idx = (city.y + CENTER_Y) * COLS + (city.x + CENTER_X);
   const cell = cells[idx];
-  if (cell) {
-    cell.style.boxShadow = 'inset 0 0 0 3px #3b82f6';
-    cell.style.zIndex = '10';
-  }
+  if (!cell) return;
+
+  const btn = cell.querySelector('.city');
+  if (!btn) return;
+
+  // Save previous state
+  if (!btn.dataset.prevClass) btn.dataset.prevClass = btn.className;
+  if (!btn.dataset.prevText) btn.dataset.prevText = btn.textContent;
+
+  btn.className = 'city absolute inset-0 rounded-none flex items-center justify-center text-[12px] font-semibold';
+  btn.textContent = city.name || `${city.x},${city.y}`;
+  btn.style.backgroundColor = city.color || '#ec4899';
+  btn.style.color = city.status === 'reserved' ? '#1e293b' : 'white';
 }
 
 function clearMapHighlight() {
-  const cells = grid.children;
-  for (const cell of cells) {
-    cell.style.boxShadow = '';
-    cell.style.zIndex = '';
-  }
+  const buttons = grid.querySelectorAll('.city');
+  buttons.forEach((btn) => {
+    if (btn.dataset.prevClass) {
+      btn.className = btn.dataset.prevClass;
+      delete btn.dataset.prevClass;
+    }
+    if (btn.dataset.prevText) {
+      btn.textContent = btn.dataset.prevText;
+      delete btn.dataset.prevText;
+    }
+  });
 }
 
 function updateStats() {
@@ -607,3 +621,4 @@ requestAnimationFrame(centerView);
 if (location.hash.slice(1) === 'test') {
   runTests();
 }
+
