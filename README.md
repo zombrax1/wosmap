@@ -1,261 +1,107 @@
-# Whiteout Spot Organizer
+# ZOMWOS – Whiteout Spot Organizer
 
-A multi-page web application for organizing spots on a grid map, built with Node.js, Express, SQLite, and vanilla JavaScript.
+An admin panel + interactive map to organize alliance cities and bear traps. Built with Node.js, Express, SQLite, and vanilla JavaScript.
 
-## Features
+This branch introduces free placement with a mobile‑first drag experience.
 
-### Core Functionality
-- **Grid Map View** (`/map`): Interactive scrollable grid centered at (0,0)
-- **List View** (`/list`): Sidebar with searchable list of all cities
-- **Admin/Viewer Modes**: Different permissions for different users
-- **City Management**: Insert, edit, delete cities with full CRUD operations (admin only)
-- **Auto-Insert**: Quick city placement for admin users
-- **Status Toggle**: Long-press (700ms) to toggle between occupied/reserved (admin only)
-- **Color Customization**: Each city can have a custom color
-- **Search & Filter**: Search by name, filter by status and level
-- **Mobile-Friendly**: Responsive design for mobile devices
-- **Persistent Storage**: SQLite database for data persistence
-- **User Management**: Create, update, delete panel users
-- **Audit Logging**: Track changes to cities and users
+## Highlights
 
-### City Properties
-- **ID**: Unique identifier (auto-generated)
-- **Name**: City/member name
-- **Level**: Numeric level (1-100)
-- **Status**: "occupied" or "reserved"
-- **Coordinates**: X, Y position on the grid
-- **Notes**: Optional text notes
-- **Color**: Custom color for visual distinction
+- Free placement: cities use absolute pixels (`px, py`) and render in an overlay.
+- Smooth drag on desktop and mobile (long‑press on mobile) with a high‑contrast ghost preview.
+- Visual non‑overlap: prevents dropping cities where they would visually merge.
+- Bear traps: long‑press any tile in the trap area (2×2/3×3) to move it, with a labeled ghost.
+- Zoom-only menu (Tile Size / City Scale removed for simplicity).
+- Live sync: map polls a snapshot; changes land within seconds.
+- Audit trail and simple user management (viewer, moderator, admin).
 
-### UI Features
-- **Responsive Design**: Mobile-first approach with TailwindCSS
-- **Mobile Optimization**: Smaller grid and touch-friendly interface on mobile
-- **Zoom Control**: Adjustable zoom level (55% - 200%)
-- **Bear Trap Highlight**: manage up to two 2×2 zones via a popup after clicking the map
-- **Trap Persistence**: Trap locations and colors stored server-side and shared across devices
-- **Hover Effects**: Interactive highlighting and tooltips
-- **Modal Dialogs**: Clean add/edit interface
-- **Real-time Updates**: Instant reflection of changes
-- **User Mode Indicator**: Shows current user mode (Admin/View Only)
+## Demo (local)
 
-## Tech Stack
+- Map view: http://localhost:3000/map
+- List view: http://localhost:3000/list
 
-- **Backend**: Node.js with Express
-- **Database**: SQLite (better-sqlite3)
-- **Frontend**: HTML, TailwindCSS, Vanilla JavaScript
-- **Testing**: Jest for backend tests
+## Quick Start
 
-## Installation
+```bash
+git clone https://github.com/zombrax1/wosmap
+cd wosmap
+npm install
+npm start   # or: npm run dev
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd whiteout-spot-organizer
-   ```
+Default admin: `admin` / `admin` (Menu → Admin Login)
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+## Placement Model (What’s New)
 
-3. **Start the server**
-   ```bash
-   npm start
-   ```
+- Cities
+  - Stored with tile coords (`x, y`) + absolute pixel center (`px, py`).
+  - Rendering prefers `px, py` (exact), falls back to tile center if missing.
+  - Desktop: click to open info; drag to move; drop to save.
+  - Mobile: tap to open info; long‑press to start drag; map scroll locks during drag.
 
-4. **Log in**
-   - Default admin credentials: `admin` / `admin`
-   - Authenticate via `POST /api/login`
+- Bear Traps
+  - Top‑left tile + square size (2×2 by default).
+  - Long‑press any tile within the trap to start dragging; drop snaps top‑left to the tile under your finger/cursor.
 
-5. **Access the application**
-   - Main page: http://localhost:3000
-   - Map view: http://localhost:3000/map
-   - List view: http://localhost:3000/list
+- Non‑overlap
+  - Client blocks city drops where their 1.5×1.5 visual squares would intersect.
+  - Server allows multiple cities per tile so visuals stay flexible.
+
+## Configuration
+
+Env vars:
+- `PORT` (default 3000)
+- `DB_PATH` (default `wos.db`)
+- `ADMIN_PASSWORD` (sets admin on first run)
+- `CORS_ORIGIN` (optional, for API)
+- `SESSION_SECRET` (session cookie secret)
+
+Dev helpers:
+- `DB_SINGLETON=false` – open DB per op (tests)
+- `RESET_DB=true`    – clear DB on startup
+
+## API (Short)
+
+- Cities: `GET/POST /api/cities`, `PUT /api/cities/:id`, `DELETE /api/cities/:id`  
+  Payload supports: `id, name, level, status, x, y, px, py, notes, color`
+- Traps: `GET /api/traps`, `POST /api/traps`, `PUT /api/traps/:id`, `DELETE /api/traps/:id`
+- Snapshot: `GET /api/snapshot` (ETag)
+- Levels: `GET/POST /api/levels`
+- Users: `GET/POST/PUT/DELETE /api/users`
+- Audit: `GET /api/audit`
+- Import/Export: `POST /api/import`, `GET /api/export`
+
+## UI Cheatsheet
+
+- Zoom: Menu → Zoom slider
+- Add city: tap/click empty area → Add City (saves `px, py` from the click)
+- Drag city (mobile): long‑press then drag; ghost shows where it will land
+- Drag trap: long‑press any trap tile then drag; drop snaps top‑left to the tile under finger/cursor
+
+## Data Model
+
+- `cities(id, name, level, status, x, y, px, py, notes, color)`
+- `traps(id, slot, x, y, color, notes)`
+- `users(id, username, password, role)`, `audit_logs`, `level_colors`
 
 ## Development
 
-### Running in Development Mode
 ```bash
-npm run dev
+npm run dev   # nodemon
+npm test      # backend tests
 ```
 
-### Running Tests
-```bash
-npm test
-```
+Tip: set `RESET_DB=true` for a clean start.
 
-### Resetting the database
-Set the `RESET_DB` environment variable to clear existing data when the server
-starts:
+## Accessibility & Mobile
 
-```bash
-RESET_DB=true npm start
-```
+- Long‑press timer ~700ms (`LONG_PRESS_MS` in code)
+- Ghost: high‑contrast cyan/red border + label (city short name / T1..T3)
+- Long‑press context menus are blocked on touch
 
-### Project Structure
-```
-whiteout-spot-organizer/
-├── server.js              # Express server with API routes
-├── package.json           # Dependencies and scripts
-├── public/                # Static files
-│   ├── map.html          # Map view page
-│   ├── list.html         # List view page
-│   ├── css/
-│   │   └── tailwind.css  # Custom styles
-│   └── js/
-│       ├── map.js        # Map view logic
-│       └── list.js       # List view logic
-└── tests/
-    └── database.test.js  # Jest tests for database operations
-```
+## Security
 
-## API Endpoints
+- Session cookies hardened; role‑based access (viewer, moderator, admin)
 
-### Cities CRUD
-- `GET /api/cities` - Get all cities
-- `POST /api/cities` - Create new city
-- `PUT /api/cities/:id` - Update existing city
-- `DELETE /api/cities/:id` - Delete city
+## Changelog
 
-### Import/Export
-- `GET /api/export` - Export all cities and traps as JSON (versioned payload)
-- `POST /api/import` - Import cities and traps from JSON (replaces all data)
-
-### Traps CRUD
-- `GET /api/traps` - List traps (public)
-- `POST /api/traps` - Create or replace trap (admin only)
-- `PUT /api/traps/:id` - Update trap (admin only)
-- `DELETE /api/traps/:id` - Remove trap (admin only)
-
-### Snapshot
-- `GET /api/snapshot` - Combined cities & traps with ETag for syncing
-
-### Users CRUD
-- `GET /api/users` - List users
-- `POST /api/users` - Create or replace user
-- `PUT /api/users/:id` - Update user
-- `DELETE /api/users/:id` - Remove user
-
-### Audit Logs
-- `GET /api/audit` - List audit log entries
-
-## Usage
-
-### User Modes
-- **Admin Mode**: Access via `?admin=true` URL parameter or localStorage
-- **Viewer Mode**: Default mode, read-only access
-
-### Adding a City (Admin Only)
-1. Click on an empty tile on the map, or
-2. Click "Insert City" button to add at (0,0), or
-3. Click "Auto Insert" for quick placement
-4. Fill in the city details in the modal
-5. Click "Save"
-
-### Auto-Insert (Admin Only)
-1. Click "Auto Insert" button
-2. Enter member name and level
-3. City will be automatically placed in an empty spot near center
-
-### Editing a City (Admin Only)
-1. Click on an existing city on the map, or
-2. Click on a city in the list view
-3. Modify the details in the modal
-4. Click "Save"
-
-### Viewing City Info (Viewer Mode)
-1. Click on any city to view its details
-2. Information is displayed in a popup
-
-### Deleting a City (Admin Only)
-1. Open the edit modal for a city
-2. Click the "Delete" button
-3. Confirm the deletion
-
-### Toggling Status (Admin Only)
-- Long-press (700ms) on any city to toggle between occupied/reserved
-
-### Bear Traps (Admin Only)
-1. Click an empty tile on the map to open the action popup.
-2. Choose **Trap 1** or **Trap 2** and pick a color to place a 2×2 trap, or select **Insert City** to add a city instead.
-3. Click any trapped tile to adjust its color or use **Delete Trap**.
-
-### Searching and Filtering
-- Use the search box to find cities by name
-- Use status and level filters in the list view
-- Hover over list items to highlight cities on the map
-
-### Mobile Usage
-- Responsive design adapts to screen size
-- Touch-friendly interface
-- Smaller grid on mobile devices
-
-## Testing
-
-The application includes comprehensive tests:
-
-### Backend Tests
-- Database CRUD operations
-- Constraint validation
-- Error handling
-
-### Frontend Self-Tests
-- Grid construction validation
-- Coordinate system verification
-- Filtering functionality
-- Status toggle verification
-
-To run self-tests, add `#test` to any page URL (e.g., `http://localhost:3000/map#test`)
-
-## Database Schema
-
-```sql
-CREATE TABLE cities (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  level INTEGER,
-  status TEXT NOT NULL DEFAULT 'occupied',
-  x INTEGER NOT NULL,
-  y INTEGER NOT NULL,
-  notes TEXT,
-  color TEXT DEFAULT '#ec4899'
-);
-
-CREATE TABLE traps (
-  id TEXT PRIMARY KEY,
-  slot INTEGER UNIQUE CHECK(slot IN (1,2)),
-  x INTEGER NOT NULL,
-  y INTEGER NOT NULL,
-  color TEXT NOT NULL DEFAULT '#f59e0b',
-  notes TEXT
-);
-```
-
-## Browser Compatibility
-
-- Modern browsers with ES6+ support
-- Mobile browsers with touch support
-- Chrome, Firefox, Safari, Edge
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
-
-## Support
-
-For issues and questions, please create an issue in the repository.
-
-### Build CSS
-The app now bundles Tailwind locally. CSS builds automatically on install via postinstall. To build manually:
-```bash
-npm run build:css
-```
-pm run build:css.
+See `CHANGELOG.md` for the latest updates on this branch.
